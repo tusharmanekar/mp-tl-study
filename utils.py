@@ -109,6 +109,7 @@ def compute_training_acc(model, dataset, params, debug=False):
 # reinitialize after cutting point using init_weights function
 def cut_model(model, sw, sb, cut_point=1):
     for layer in model.layers:
+        pass
 
 # Replicate the pretrained model, cut at each layer and fine-tune, 
 # return a list of accuracies (and some more results) for each layers.

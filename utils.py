@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
+import copy
 
 # init given linear layer m with given sw and sb
 def init_weights(m, sw, sb):
@@ -73,6 +74,25 @@ class MNISTtrainer(object):
                 ])),
             batch_size=batch_size,
             shuffle=True)
+        
+class FashionMNISTtrainer(object):
+    def __init__(self, batch_size):
+        self.input_dim = 28 * 28
+        self.output_dim = 10
+
+        # rescale to [-.5, .5]
+        self.loader = torch.utils.data.DataLoader(
+            datasets.FashionMNIST(
+                '../data',
+                train=True,
+                download=True,
+                transform=transforms.Compose([
+                    transforms.ToTensor(),
+                    transforms.Lambda(lambda x: (x * 2 - 1) * 0.5),
+                ])),
+            batch_size=batch_size,
+            shuffle=True)
+
 
 
 # TODO: option to freeze some layers
@@ -143,9 +163,40 @@ def compute_training_acc_epochs(model, dataset, params, debug=False):
 
 # cut_point: no. of layers to keep in the model
 # reinitialize after cutting point using init_weights function
-def cut_model(model, sw, sb, cut_point=1):
-    for layer in model.layers:
-        pass
+def cut_model(model, sw = 1, sb = 1, cut_point=1, freeze=True):
+    #deepcopy to avoid changing the original model
+    model = copy.deepcopy(model)
+    # Convert sequential model to list of layers
+    layers = list(model.children())
+
+    # Check if cut_point is out of range
+    if cut_point < 0 or cut_point >= len(layers) // 2:
+        raise ValueError("cut_point should be in range [0, number of layers - 1]")
+
+    # If freeze is True, set requires_grad to False for layers before cut_point
+    if freeze:
+        for i in range(cut_point):
+            for param in layers[2*i].parameters():
+                param.requires_grad = False
+
+    # Cut layers
+    new_layers = layers[:2*cut_point]
+
+    # Reinitialize layers after cut point
+    for i in range(cut_point, len(layers) // 2):
+        linear_layer = layers[2*i]
+        activation = layers[2*i + 1]
+
+        # Apply initialization
+        init_weights(linear_layer, sw, sb)
+
+        # Append to new layers
+        new_layers.extend([linear_layer, activation])
+
+    # Return new model
+    return nn.Sequential(*new_layers)
+
+
 
 # Replicate the pretrained model, cut at each layer and fine-tune, 
 # return a list of accuracies (and some more results) for each layers.

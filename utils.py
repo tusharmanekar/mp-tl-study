@@ -105,6 +105,42 @@ def compute_training_acc(model, dataset, params, debug=False):
 
     return train_acc, model
 
+# like previous function, but run for given number of epochs determined by params['num_train']
+def compute_training_acc_epochs(model, dataset, params, debug=False):
+    device = torch.device(params['device'])
+    model.apply(lambda m: init_weights(m, params['sw'], params['sb']))
+    optimizer = optim.SGD(model.parameters(), lr=params['lr'])
+    
+    if debug: 
+        print(model, optimizer)
+
+    train_acc = 0.0
+    model.train()
+
+    # Loop over epochs
+    for epoch in range(params['num_train']):
+        for batch_idx, (data, target) in enumerate(dataset.loader):
+            data, target = data.reshape([data.shape[0], -1]).to(device), target.to(device)
+            optimizer.zero_grad()
+            output = model(data)
+            loss = F.nll_loss(output, target)
+            loss.backward()
+            optimizer.step()
+
+            if debug and batch_idx % 20 == 0:
+                #print('Epoch: {} Train step: {} \tLoss: {:.6f}'.format(epoch, batch_idx, loss.item()))
+                pass
+
+        # Evaluate after each epoch
+        if debug:
+            train_acc = eval(model, device, dataset.loader, debug)
+            print('Epoch: {} \tTraining Accuracy: {:.2f}%'.format(epoch, train_acc*100))
+
+    # Final evaluation after all epochs are completed
+    train_acc = eval(model, device, dataset.loader, debug)
+    return train_acc, model
+
+
 # cut_point: no. of layers to keep in the model
 # reinitialize after cutting point using init_weights function
 def cut_model(model, sw, sb, cut_point=1):

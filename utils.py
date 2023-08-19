@@ -33,21 +33,7 @@ def generate_fc_dnn(input_dim, output_dim, depth, width):
 
 import torch.nn as nn
 
-def generate_cnn(input_dim, output_dim, depth, num_channels):
-    """
-    Generate a CNN model.
-
-    Parameters:
-    - input_dim (int): Height/Width of square input image.
-    - output_dim (int): Number of output classes.
-    - depth (int): Number of convolutional layers.
-    - num_channels (int): Number of channels for the first convolutional layer. 
-                          This will be doubled after each layer for the demonstration.
-
-    Returns:
-    - model (nn.Sequential): CNN model.
-    """
-
+'''def generate_cnn(input_dim, output_dim, depth, num_channels):
     layers = []
     in_channels = 1  # Assuming grayscale input images
 
@@ -55,39 +41,15 @@ def generate_cnn(input_dim, output_dim, depth, num_channels):
     for i in range(depth):
         layers.append(nn.Conv2d(in_channels, num_channels, kernel_size=3, padding=1))
         layers.append(nn.Tanh())
-        layers.append(nn.MaxPool2d(2))
-        in_channels = num_channels
-        #num_channels *= 2
-
-        # Adjust input_dim due to max pooling
-        input_dim = input_dim // 2
-
-    # Flatten the output from convolutional layers
-    layers.append(nn.Flatten())
-
-    # Fully connected layer for classification
-    layers.append(nn.Linear(in_channels * input_dim * input_dim, output_dim))
-    layers.append(nn.LogSoftmax(dim=1))
-
-    model = nn.Sequential(*layers)
-    return model
-
-'''def generate_cnn(input_dim, output_dim, depth, num_channels):
-    layers = []
-    in_channels = 1  # Assuming grayscale input images
-
-    # Convolutional layers
-    for i in range(depth):
-        layers.append(nn.Conv2d(in_channels, num_channels, kernel_size=3 if i > 0 else 5, padding=1))
-        layers.append(nn.Tanh())
         
         # Add MaxPool2d layer every 2 convolutional layers
         if i % 2 == 1:
             layers.append(nn.MaxPool2d(2))
             input_dim = input_dim // 2
+            print("input_dim: ", input_dim)
         
         in_channels = num_channels
-        num_channels *= 2
+        #num_channels *= 2
 
     # Flatten the output from convolutional layers
     layers.append(nn.Flatten())
@@ -100,7 +62,51 @@ def generate_cnn(input_dim, output_dim, depth, num_channels):
     return model
 '''
 
+import torch.nn as nn
 
+class CustomCNN(nn.Module):
+    def __init__(self, input_dim, output_dim, depth, num_channels):
+        super(CustomCNN, self).__init__()
+
+        in_channels = 1  # Assuming grayscale input images
+        conv_count = 0
+        pool_count = 0
+
+        for i in range(depth):
+            # Name the layers
+            conv_name = f"conv{conv_count + 1}"
+            act_name = f"tanh{conv_count + 1}"
+
+            # Add convolutional layer
+            setattr(self, conv_name, nn.Conv2d(in_channels, num_channels, kernel_size=3, padding=1))
+            # Add activation layer
+            setattr(self, act_name, nn.Tanh())
+            conv_count += 1
+
+            # Add MaxPool2d layer every 2 convolutional layers
+            if i % 2 == 1:
+                pool_name = f"pool{pool_count + 1}"
+                setattr(self, pool_name, nn.MaxPool2d(2))
+                pool_count += 1
+                input_dim = input_dim // 2
+                print("input_dim: ", input_dim)
+            
+            in_channels = num_channels
+            # num_channels *= 2
+
+        # Add fully connected layer for classification
+        self.flatten = nn.Flatten()
+        self.fc = nn.Linear(in_channels * input_dim * input_dim, output_dim)
+        self.logsoftmax = nn.LogSoftmax(dim=1)
+
+    def forward(self, x):
+        for i, layer in enumerate(self.children()):
+            x = layer(x)
+        return x
+
+def generate_cnn(input_dim, output_dim, depth, num_channels):
+    model = CustomCNN(input_dim, output_dim, depth, num_channels)
+    return model
 
 # dataset_loader is fine-tuning dataset
 def eval(model, device, dataset_loader, debug):

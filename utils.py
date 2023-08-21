@@ -1,11 +1,13 @@
 import numpy as np
+np.random.seed(42)
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torchvision import datasets, transforms
+
 import copy
+from data_utils import *
 
 # init given linear layer m with given sw and sb
 def init_weights(m, sw, sb):
@@ -16,7 +18,8 @@ def init_weights(m, sw, sb):
 # init new model
 # TODO: activation function
 # TODO: name the layers
-def generate_fc_dnn(input_dim, output_dim, depth, width):
+def generate_fc_dnn(input_dim, output_dim, params):
+    depth, width = params['depth'], params['width']
     def gen_linear_layer_dim(layer_index):
         return {
             0: (input_dim, width),
@@ -29,7 +32,9 @@ def generate_fc_dnn(input_dim, output_dim, depth, width):
             nn.Linear(*gen_linear_layer_dim(i)),
             nn.LogSoftmax(dim=1) if (depth - 1 == i) else nn.Tanh()
         ]
-    return nn.Sequential(*fc_list)
+    model = nn.Sequential(*fc_list)
+    model.apply(lambda m: init_weights(m, params['sw'], params['sb']))
+    return model
 
 import torch.nn as nn
 
@@ -65,47 +70,43 @@ import torch.nn as nn
 import torch.nn as nn
 
 class CustomCNN(nn.Module):
-    def __init__(self, input_dim, output_dim, depth, num_channels):
-        super(CustomCNN, self).__init__()
-
+    def init(self, input_dim, output_dim, depth, num_channels, act_fn, use_pooling=True):
+        super(CustomCNN, self).init()
         in_channels = 1  # Assuming grayscale input images
         conv_count = 0
-        pool_count = 0
+
+        self.layers = nn.ModuleList()
 
         for i in range(depth):
-            # Name the layers
-            conv_name = f"conv{conv_count + 1}"
-            act_name = f"tanh{conv_count + 1}"
-
             # Add convolutional layer
-            setattr(self, conv_name, nn.Conv2d(in_channels, num_channels, kernel_size=3, padding=1))
+            self.layers.append(nn.Conv2d(in_channels, num_channels, kernel_size=3, padding=1))
             # Add activation layer
-            setattr(self, act_name, nn.Tanh())
+            self.layers.append(act_fn())
             conv_count += 1
 
-            # Add MaxPool2d layer every 2 convolutional layers
-            if i % 2 == 1:
-                pool_name = f"pool{pool_count + 1}"
-                setattr(self, pool_name, nn.MaxPool2d(2))
-                pool_count += 1
+            # Add MaxPool2d layer every 2 convolutional layers if use_pooling is set
+            if use_pooling and i % 2 == 1:
+                self.layers.append(nn.MaxPool2d(2))
                 input_dim = input_dim // 2
                 print("input_dim: ", input_dim)
-            
+
             in_channels = num_channels
-            # num_channels *= 2
+            # num_channels = 2
 
         # Add fully connected layer for classification
         self.flatten = nn.Flatten()
-        self.fc = nn.Linear(in_channels * input_dim * input_dim, output_dim)
+        self.fc = nn.Linear(in_channels input_dim * input_dim, output_dim)
         self.logsoftmax = nn.LogSoftmax(dim=1)
 
     def forward(self, x):
-        for i, layer in enumerate(self.children()):
+        for layer in self.layers:
             x = layer(x)
-        return x
+        x = self.flatten(x)
+        x = self.fc(x)
+        return self.logsoftmax(x)
 
-def generate_cnn(input_dim, output_dim, depth, num_channels):
-    model = CustomCNN(input_dim, output_dim, depth, num_channels)
+def generate_cnn(input_dim, output_dim, depth, num_channels, act_fn=nn.ReLU, use_pooling=True):
+    model = CustomCNN(input_dim, output_dim, depth, num_channels, act_fn, use_pooling)
     return model
 
 # dataset_loader is fine-tuning dataset
@@ -114,8 +115,7 @@ def eval(model, device, dataset_loader, debug):
     test_loss, correct = 0., 0.
     with torch.no_grad():
         for data, target in dataset_loader:
-            data, target = data.reshape([data.shape[0],
-                                         -1]).to(device), target.to(device)
+            data, target = data.reshape([data.shape[0], -1]).to(device), target.to(device)
             output = model(data)
             test_loss += F.nll_loss(
                 output, target, reduction='sum').item()  # sum up batch loss
@@ -133,98 +133,18 @@ def eval(model, device, dataset_loader, debug):
 
     return acc
 
-
-class MNISTtrainer(object):
-    def __init__(self, batch_size):
-        self.input_dim = 28 * 28
-        self.output_dim = 10
-
-        # rescale to [-.5, .5]
-        self.loader = torch.utils.data.DataLoader(
-            datasets.MNIST(
-                '../data',
-                train=True,
-                download=True,
-                transform=transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Lambda(lambda x: (x * 2 - 1) * 0.5),
-                ])),
-            batch_size=batch_size,
-            shuffle=True)
-        
-
-class MNISTtrainerCNN(object):
-    def __init__(self, batch_size):
-        self.input_dim = (1, 28, 28)  # Channels x Height x Width
-        self.output_dim = 10
-
-        # rescale to [-.5, .5]
-        self.loader = torch.utils.data.DataLoader(
-            datasets.MNIST(
-                '../data',
-                train=True,
-                download=True,
-                transform=transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Lambda(lambda x: (x * 2 - 1) * 0.5),
-                ])),
-            batch_size=batch_size,
-            shuffle=True)
-
-        
-class FashionMNISTtrainer(object):
-    def __init__(self, batch_size):
-        self.input_dim = 28 * 28
-        self.output_dim = 10
-
-        # rescale to [-.5, .5]
-        self.loader = torch.utils.data.DataLoader(
-            datasets.FashionMNIST(
-                '../data',
-                train=True,
-                download=True,
-                transform=transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Lambda(lambda x: (x * 2 - 1) * 0.5),
-                ])),
-            batch_size=batch_size,
-            shuffle=True)
-
-
-class FashionMNISTtrainerCNN(object):
-    def __init__(self, batch_size):
-        self.input_dim = (1, 28, 28)  # Channels x Height x Width
-        self.output_dim = 10
-
-        # rescale to [-.5, .5]
-        self.loader = torch.utils.data.DataLoader(
-            datasets.FashionMNIST(
-                '../data',
-                train=True,
-                download=True,
-                transform=transforms.Compose([
-                    transforms.ToTensor(),
-                    transforms.Lambda(lambda x: (x * 2 - 1) * 0.5),
-                ])),
-            batch_size=batch_size,
-            shuffle=True)
-
-
 # TODO: option to freeze some layers
 # TODO: option to save the model?
 def compute_training_acc(model, dataset, params, debug=False):
-
     device = torch.device(params['device'])
-    model.apply(lambda m: init_weights(m, params['sw'], params['sb']))
     optimizer = optim.SGD(model.parameters(), lr=params['lr'])
     if debug: print(model, optimizer)
 
     # run training for few steps and return the accuracy
     train_acc = 0.0
     model.train()
-    for batch_idx, (data, target) in enumerate(dataset.loader):
-        data, target = data.reshape([data.shape[0],
-                                     -1]).to(device), target.to(device)
+    for batch_idx, (data, target) in enumerate(dataset.train_loader):
+        data, target = data.reshape([data.shape[0],-1]).to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
         loss = F.nll_loss(output, target)
@@ -235,15 +155,18 @@ def compute_training_acc(model, dataset, params, debug=False):
             print('Train step: {} \tLoss: {:.6f}'.format(
                 batch_idx, loss.item()))
         if (batch_idx == params['num_train']):
-            train_acc = eval(model, device, dataset.loader, debug)
+            train_acc = eval(model, device, dataset.train_loader, debug=False)
             break
 
-    return train_acc, model
+    train_acc = eval(model, device, dataset.train_loader, debug=False)
+    test_acc = eval(model, device, dataset.test_loader, debug=False)
+    return train_acc, test_acc, model
 
 # like previous function, but run for given number of epochs determined by params['num_train']
 def compute_training_acc_epochs(model, dataset, params, debug=False):
+    print("yo")
+    
     device = torch.device(params['device'])
-    model.apply(lambda m: init_weights(m, params['sw'], params['sb']))
     optimizer = optim.SGD(model.parameters(), lr=params['lr'])
     
     if debug: 
@@ -254,7 +177,7 @@ def compute_training_acc_epochs(model, dataset, params, debug=False):
 
     # Loop over epochs
     for epoch in range(params['num_train']):
-        for batch_idx, (data, target) in enumerate(dataset.loader):
+        for batch_idx, (data, target) in enumerate(dataset.train_loader):
             data, target = data.reshape([data.shape[0], -1]).to(device), target.to(device)
             optimizer.zero_grad()
             output = model(data)
@@ -268,12 +191,16 @@ def compute_training_acc_epochs(model, dataset, params, debug=False):
 
         # Evaluate after each epoch
         if debug:
-            train_acc = eval(model, device, dataset.loader, debug)
+            train_acc = eval(model, device, dataset.train_loader, debug=False)
             print('Epoch: {} \tTraining Accuracy: {:.2f}%'.format(epoch, train_acc*100))
+            # if debug and (epoch+1) % 1 == 0:
+            val_acc = eval(model, device, dataset.val_loader, debug=False)
+            print('Validation Accuracy: {:.2f}%'.format(val_acc*100))
 
     # Final evaluation after all epochs are completed
-    train_acc = eval(model, device, dataset.loader, debug)
-    return train_acc, model
+    train_acc = eval(model, device, dataset.train_loader, debug=False)
+    test_acc = eval(model, device, dataset.test_loader, debug=False)
+    return train_acc, test_acc, model
 
 def eval_cnn(model, device, dataset_loader, debug):
     model.eval()
@@ -296,7 +223,6 @@ def eval_cnn(model, device, dataset_loader, debug):
 
 def compute_training_acc_epochs_cnn(model, dataset, params, debug=False):
     device = torch.device(params['device'])
-    model.apply(lambda m: init_weights(m, params['sw'], params['sb']))
     optimizer = optim.SGD(model.parameters(), lr=params['lr'])
     
     if debug: 
@@ -307,7 +233,7 @@ def compute_training_acc_epochs_cnn(model, dataset, params, debug=False):
 
     # Loop over epochs
     for epoch in range(params['num_train']):
-        for batch_idx, (data, target) in enumerate(dataset.loader):
+        for batch_idx, (data, target) in enumerate(dataset.train_loader):
             data, target = data.to(device), target.to(device)
             optimizer.zero_grad()
             output = model(data)
@@ -320,12 +246,16 @@ def compute_training_acc_epochs_cnn(model, dataset, params, debug=False):
 
         # Evaluate after each epoch
         if debug:
-            train_acc = eval_cnn(model, device, dataset.loader, debug)
+            train_acc = eval_cnn(model, device, dataset.train_loader, debug=False)
             print('Epoch: {} \tTraining Accuracy: {:.2f}%'.format(epoch, train_acc*100))
-
+            if debug and (epoch+1) % 3 == 0:
+                val_acc = eval_cnn(model, device, dataset.val_loader, debug=False)
+                print('Validation Accuracy: {:.2f}%'.format(val_acc*100))
+                
     # Final evaluation after all epochs are completed
-    train_acc = eval_cnn(model, device, dataset.loader, debug)
-    return train_acc, model
+    train_acc = eval_cnn(model, device, dataset.train_loader, debug=False)
+    test_acc = eval_cnn(model, device, dataset.test_loader, debug=False)
+    return train_acc, test_acc, model
 
 
 
@@ -411,17 +341,3 @@ def cut_cnn_model(model, cut_point=1, freeze=True):
 
     # Return new model
     return nn.Sequential(*new_layers)
-
-
-# Replicate the pretrained model, cut at each layer and fine-tune, 
-# return a list of accuracies (and some more results) for each layers.
-def calculate_cut_accuracies(model, sw, sb, dataset, params):
-    train_accuracies = []
-    for i, layer in enumerate(model.layers):
-        model_tmp = cut_model(model, sw, sb, cut_point=i)
-        # TODO: don't forget to freeze the layers
-        acc, model_tmp_fine_tuned = compute_training_acc(dataset, params, debug=False)
-        train_accuracies.append(acc)
-    return train_accuracies
-
-# TODO: Add other util functions: plotting training etc

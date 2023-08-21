@@ -95,7 +95,7 @@ class CustomCNN(nn.Module):
 
         # Add fully connected layer for classification
         self.flatten = nn.Flatten()
-        self.fc = nn.Linear(in_channels input_dim * input_dim, output_dim)
+        self.fc = nn.Linear(in_channels, input_dim * input_dim, output_dim)
         self.logsoftmax = nn.LogSoftmax(dim=1)
 
     def forward(self, x):

@@ -138,7 +138,7 @@ def eval(model, device, dataset_loader, debug):
 def compute_training_acc(model, dataset, params, debug=False):
     device = torch.device(params['device'])
     optimizer = optim.SGD(model.parameters(), lr=params['lr'])
-    if debug: print(model, optimizer)
+    # if debug: print(model, optimizer)
 
     # run training for few steps and return the accuracy
     train_acc = 0.0
@@ -151,12 +151,13 @@ def compute_training_acc(model, dataset, params, debug=False):
         loss.backward()
         optimizer.step()
 
-        if debug and batch_idx % 20 == 0:
-            print('Train step: {} \tLoss: {:.6f}'.format(
-                batch_idx, loss.item()))
-        if (batch_idx == params['num_train']):
+        # Evaluate after every 10 steps epoch
+        if debug and batch_idx % 10 == 0:
             train_acc = eval(model, device, dataset.train_loader, debug=False)
-            break
+            print('Step: {} \tTraining Accuracy: {:.2f}%'.format(batch_idx, train_acc*100))
+            # if debug and (epoch+1) % 1 == 0:
+            val_acc = eval(model, device, dataset.val_loader, debug=False)
+            print('\t\tValidation Accuracy: {:.2f}%'.format(val_acc*100))
 
     train_acc = eval(model, device, dataset.train_loader, debug=False)
     test_acc = eval(model, device, dataset.test_loader, debug=False)
@@ -164,13 +165,13 @@ def compute_training_acc(model, dataset, params, debug=False):
 
 # like previous function, but run for given number of epochs determined by params['num_train']
 def compute_training_acc_epochs(model, dataset, params, debug=False):
-    print("yo")
-    
     device = torch.device(params['device'])
-    optimizer = optim.SGD(model.parameters(), lr=params['lr'])
-    
-    if debug: 
-        print(model, optimizer)
+    optimizer = optim.SGD(model.parameters(), lr=params['lr'])   
+    # if debug: print(model, optimizer)
+
+    if params['early_stop_patience']:
+        no_improve_epochs = 0
+        max_val_acc = 0.
 
     train_acc = 0.0
     model.train()
@@ -196,6 +197,17 @@ def compute_training_acc_epochs(model, dataset, params, debug=False):
             # if debug and (epoch+1) % 1 == 0:
             val_acc = eval(model, device, dataset.val_loader, debug=False)
             print('Validation Accuracy: {:.2f}%'.format(val_acc*100))
+
+            if params['early_stop_patience']:
+                if val_acc > max_val_acc:
+                    max_val_acc = val_acc
+                    no_improve_epochs = 0
+                else:
+                    no_improve_epochs += 1
+                    print("val_acc: {}, max_val_acc: {}, no_improve_epochs: {}".format(val_acc, max_val_acc, no_improve_epochs))
+                    if no_improve_epochs >= params['early_stop_patience']:
+                        print("Early stopping invoked.")
+                        break
 
     # Final evaluation after all epochs are completed
     train_acc = eval(model, device, dataset.train_loader, debug=False)

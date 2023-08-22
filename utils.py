@@ -36,6 +36,24 @@ def generate_fc_dnn(input_dim, output_dim, params):
     model.apply(lambda m: init_weights(m, params['sw'], params['sb']))
     return model
 
+def generate_fc_dnn_relu(input_dim, output_dim, params):
+    depth, width = params['depth'], params['width']
+    def gen_linear_layer_dim(layer_index):
+        return {
+            0: (input_dim, width),
+            depth - 1: (width, output_dim),
+        }.get(layer_index, (width, width))
+
+    fc_list = list()
+    for i in range(depth):
+        fc_list += [
+            nn.Linear(*gen_linear_layer_dim(i)),
+            nn.LogSoftmax(dim=1) if (depth - 1 == i) else nn.ReLU()
+        ]
+    model = nn.Sequential(*fc_list)
+    model.apply(lambda m: init_weights(m, params['sw'], params['sb']))
+    return model
+
 import torch.nn as nn
 
 '''def generate_cnn(input_dim, output_dim, depth, num_channels):

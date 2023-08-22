@@ -56,76 +56,45 @@ def generate_fc_dnn_relu(input_dim, output_dim, params):
 
 import torch.nn as nn
 
-'''def generate_cnn(input_dim, output_dim, depth, num_channels):
-    layers = []
-    in_channels = 1  # Assuming grayscale input images
-
-    # Convolutional layers
-    for i in range(depth):
-        layers.append(nn.Conv2d(in_channels, num_channels, kernel_size=3, padding=1))
-        layers.append(nn.Tanh())
-        
-        # Add MaxPool2d layer every 2 convolutional layers
-        if i % 2 == 1:
-            layers.append(nn.MaxPool2d(2))
-            input_dim = input_dim // 2
-            print("input_dim: ", input_dim)
-        
-        in_channels = num_channels
-        #num_channels *= 2
-
-    # Flatten the output from convolutional layers
-    layers.append(nn.Flatten())
-
-    # Fully connected layer for classification
-    layers.append(nn.Linear(in_channels * input_dim * input_dim, output_dim))
-    layers.append(nn.LogSoftmax(dim=1))
-
-    model = nn.Sequential(*layers)
-    return model
-'''
-
-import torch.nn as nn
-
 class CustomCNN(nn.Module):
-    def init(self, input_dim, output_dim, depth, num_channels, act_fn, use_pooling=True):
-        super(CustomCNN, self).init()
+    def __init__(self, input_dim, output_dim, depth, num_channels, act_fn, use_pooling=True):
+        super(CustomCNN, self).__init__()
+        
         in_channels = 1  # Assuming grayscale input images
-        conv_count = 0
-
-        self.layers = nn.ModuleList()
 
         for i in range(depth):
             # Add convolutional layer
-            self.layers.append(nn.Conv2d(in_channels, num_channels, kernel_size=3, padding=1))
+            setattr(self, f"conv{i}", nn.Conv2d(in_channels, num_channels, kernel_size=3, padding=1))
+            
             # Add activation layer
-            self.layers.append(act_fn())
-            conv_count += 1
+            setattr(self, f"act{i}", act_fn())
 
             # Add MaxPool2d layer every 2 convolutional layers if use_pooling is set
             if use_pooling and i % 2 == 1:
-                self.layers.append(nn.MaxPool2d(2))
+                setattr(self, f"pool{i}", nn.MaxPool2d(2))
                 input_dim = input_dim // 2
-                print("input_dim: ", input_dim)
 
             in_channels = num_channels
-            # num_channels = 2
 
-        # Add fully connected layer for classification
-        self.flatten = nn.Flatten()
-        self.fc = nn.Linear(in_channels, input_dim * input_dim, output_dim)
+        flattened_size = in_channels * input_dim * input_dim
+        self.fc = nn.Linear(flattened_size, output_dim)
         self.logsoftmax = nn.LogSoftmax(dim=1)
 
     def forward(self, x):
-        for layer in self.layers:
+        for layer_name in list(self._modules.keys())[:-2]:  # excluding fc and logsoftmax
+            layer = getattr(self, layer_name)
             x = layer(x)
-        x = self.flatten(x)
+        
+        #print(x.size())  # Print the tensor size before flattening
+        x = x.view(x.size(0), -1)
         x = self.fc(x)
         return self.logsoftmax(x)
+
 
 def generate_cnn(input_dim, output_dim, depth, num_channels, act_fn=nn.ReLU, use_pooling=True):
     model = CustomCNN(input_dim, output_dim, depth, num_channels, act_fn, use_pooling)
     return model
+
 
 # dataset_loader is fine-tuning dataset
 def eval(model, device, dataset_loader, debug):
@@ -266,7 +235,7 @@ def compute_training_acc_epochs_cnn(model, dataset, params, debug=False):
         if debug:
             train_acc = eval_cnn(model, device, dataset.train_loader, debug=False)
             print('Epoch: {} \tTraining Accuracy: {:.2f}%'.format(epoch, train_acc*100))
-            if debug and (epoch+1) % 3 == 0:
+            if debug and (epoch+1) % 1 == 0:
                 val_acc = eval_cnn(model, device, dataset.val_loader, debug=False)
                 print('Validation Accuracy: {:.2f}%'.format(val_acc*100))
                 
@@ -359,3 +328,40 @@ def cut_cnn_model(model, cut_point=1, freeze=True):
 
     # Return new model
     return nn.Sequential(*new_layers)
+
+
+import copy
+
+def cut_cnn_model_orthogonal(model, cut_point=1, freeze=True):
+    """
+    Cut the CustomCNN model at a specific layer and reinitialize the weights for layers after cut_point.
+
+    Parameters:
+    - model (CustomCNN): Original model.
+    - cut_point (int): Layer index at which to cut the model.
+    - freeze (bool): If True, layers before cut_point will have their weights frozen.
+
+    Returns:
+    - new_model (CustomCNN): Cut and potentially modified model.
+    """
+    
+    # Deep copy to avoid changing the original model
+    model = copy.deepcopy(model)
+
+    # Convert modules to a list for ease of access
+    layers = list(model.named_children())
+    
+    current_layer = 0
+    for name, layer in layers:
+        # Check the type of layer and decide on actions
+        if isinstance(layer, nn.Conv2d):
+            if current_layer < cut_point:
+                if freeze:
+                    for param in layer.parameters():
+                        param.requires_grad = False
+            else:
+                # Reinitialize weights for layers after the cut point
+                weights_init(layer)
+            current_layer += 1
+
+    return model

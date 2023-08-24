@@ -120,8 +120,6 @@ def eval(model, device, dataset_loader, debug):
 
     return acc
 
-# TODO: option to freeze some layers
-# TODO: option to save the model?
 def compute_training_acc(model, dataset, params, debug=False):
     device = torch.device(params['device'])
     optimizer = optim.SGD(model.parameters(), lr=params['lr'])

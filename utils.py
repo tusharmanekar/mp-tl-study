@@ -1,10 +1,30 @@
-import numpy as np
-np.random.seed(42)
+'''
+params = dict(device=device,
+                width=width, lr=1e-3, num_train=60,
+                sb=0.05, depth=depth, sw=2.0, early_stop_patience=10, activation_function='relu')
+if params['activation_function'] == 'relu':
+    activation_function = nn.ReLU
+elif params['activation_function'] == 'tanh':
+    activation_function = nn.Tanh
+else:
+    activation_function = nn.Tanh
+'''
 
-import torch
+import numpy as np
+import torch, random
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+###############################random seed##############################################################################
+# manualSeed = random.randint(1, 10000) # fix seed
+manualSeed = 42
+print("Random Seed: ",manualSeed)
+random.seed(manualSeed)
+torch.manual_seed(manualSeed)
+np.random.seed(manualSeed)
+#torch.cuda.manual_seed_all(manualSeed)
+# cudnn.benchmark = True
+########################################################################################################################
 
 import copy
 from data_utils import *
@@ -18,22 +38,27 @@ def init_weights(m, sw, sb):
 # init new model
 # TODO: activation function
 # TODO: name the layers
-def generate_fc_dnn(input_dim, output_dim, params):
+def generate_fc_dnn(input_dim, output_dim, params, activation_function=nn.Tanh, gaussian_init=True):
     depth, width = params['depth'], params['width']
+    
     def gen_linear_layer_dim(layer_index):
         return {
             0: (input_dim, width),
             depth - 1: (width, output_dim),
         }.get(layer_index, (width, width))
-
-    fc_list = list()
+    
+    model = nn.Sequential()
+    
     for i in range(depth):
-        fc_list += [
-            nn.Linear(*gen_linear_layer_dim(i)),
-            nn.LogSoftmax(dim=1) if (depth - 1 == i) else nn.Tanh()
-        ]
-    model = nn.Sequential(*fc_list)
-    model.apply(lambda m: init_weights(m, params['sw'], params['sb']))
+        linear_layer = nn.Linear(*gen_linear_layer_dim(i))
+        activation_layer = nn.LogSoftmax(dim=1) if (depth - 1 == i) else activation_function()
+        
+        # Give descriptive names to layers
+        setattr(model, f"linear{i}", linear_layer)
+        setattr(model, f"activation{i}", activation_layer)
+        
+    if gaussian_init:
+        model.apply(lambda m: init_weights(m, params['sw'], params['sb']))
     return model
 
 def generate_fc_dnn_relu(input_dim, output_dim, params):
@@ -149,7 +174,7 @@ def compute_training_acc(model, dataset, params, debug=False):
     return train_acc, test_acc, model
 
 # like previous function, but run for given number of epochs determined by params['num_train']
-def compute_training_acc_epochs(model, dataset, params, debug=False):
+def compute_training_acc_epochs(model, dataset, params, debug=False, save_checkpoints=False):
     device = torch.device(params['device'])
     optimizer = optim.SGD(model.parameters(), lr=params['lr'])   
     # if debug: print(model, optimizer)
@@ -160,6 +185,7 @@ def compute_training_acc_epochs(model, dataset, params, debug=False):
 
     train_acc = 0.0
     model.train()
+    checkpoints = []
 
     # Loop over epochs
     for epoch in range(params['num_train']):
@@ -193,11 +219,26 @@ def compute_training_acc_epochs(model, dataset, params, debug=False):
                     if no_improve_epochs >= params['early_stop_patience']:
                         print("Early stopping invoked.")
                         break
+        
+        if save_checkpoints:
+            # Save checkpoint after each epoch
+            checkpoint = {
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'train_acc': train_acc,
+                'val_acc': val_acc
+            }
+            torch.save(checkpoint, 'checkpoint_epoch_{}.pth'.format(epoch))
+            checkpoints.append(checkpoint)
 
     # Final evaluation after all epochs are completed
     train_acc = eval(model, device, dataset.train_loader, debug=False)
     test_acc = eval(model, device, dataset.test_loader, debug=False)
-    return train_acc, test_acc, model
+    if save_checkpoints:
+        return train_acc, test_acc, model, checkpoints
+    else:
+        return train_acc, test_acc, model
 
 def eval_cnn(model, device, dataset_loader, debug):
     model.eval()

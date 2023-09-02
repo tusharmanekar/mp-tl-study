@@ -43,12 +43,7 @@ def plot_variances(variances, results):
     plt.legend()
     plt.show()
 
-def plot_variances_by_layer_type(variances, results, cnn = True):
-    # Create a list of layer names and variances
-    layer_names = list(variances.keys())
-    variance_values = [variance.mean().item() for variance in variances.values()]
-    variance_of_variance_values = [results[layer]['variance_of_variance'] for layer in layer_names]
-
+def plot_variances_by_layer_type(variances, results, cnn = True, ignore_final_layer=False):
     # Create a list of layer names and variances for fc layers
     if cnn:
         layer_type = 'conv'
@@ -65,6 +60,16 @@ def plot_variances_by_layer_type(variances, results, cnn = True):
     # Extract variance of variance values
     conv_variance_of_variance_values = [results[name]['variance_of_variance'] for name in conv_layer_names]
     activation_variance_of_variance_values = [results[name]['variance_of_variance'] for name in activation_layer_names]
+
+    # Ignore the final layer if specified
+    if ignore_final_layer:
+        conv_layer_names = conv_layer_names[:-1]
+        conv_variance_values = conv_variance_values[:-1]
+        conv_variance_of_variance_values = conv_variance_of_variance_values[:-1]
+
+        activation_layer_names = activation_layer_names[:-1]
+        activation_variance_values = activation_variance_values[:-1]
+        activation_variance_of_variance_values = activation_variance_of_variance_values[:-1]
 
     # Create lists for mean, min, and max variance for each type of layer
     def extract_variances_from_names(names, variances):

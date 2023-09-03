@@ -1,7 +1,13 @@
-import numpy as np
-np.random.seed(42)
-
 import torch
+import numpy as np
+import random
+SEED = 42
+random.seed(SEED)
+np.random.seed(SEED)
+torch.manual_seed(SEED)
+torch.cuda.manual_seed(SEED)
+torch.backends.cudnn.deterministic = True
+
 from torchvision import datasets, transforms
 import torch.optim as optim
 import torch.nn.functional as F
@@ -25,7 +31,7 @@ class MNISTtrainer(object):
                 ]))
         
         # split some part of train set to validation
-        train_set, val_set = torch.utils.data.random_split(train, [1.-self.val_split, self.val_split])
+        train_set, val_set = torch.utils.data.random_split(train, [1.-self.val_split, self.val_split], generator=torch.Generator().manual_seed(SEED))
         self.train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True)
         self.val_loader = torch.utils.data.DataLoader(val_set, batch_size=batch_size, shuffle=True)
         
@@ -59,7 +65,7 @@ class FashionMNISTtrainer(object):
             ]))
         
         # split some part of train set to validation
-        train_set, val_set = torch.utils.data.random_split(train, [1.-self.val_split, self.val_split])
+        train_set, val_set = torch.utils.data.random_split(train, [1.-self.val_split, self.val_split], generator=torch.Generator().manual_seed(SEED))
         self.train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True)
         self.val_loader = torch.utils.data.DataLoader(val_set, batch_size=batch_size, shuffle=True)
 
@@ -104,9 +110,9 @@ class TransferLearningMNIST(object):
         finetune_val_len = int(val_split * finetune_len)
 
         pretrain_train_set, pretrain_val_set = torch.utils.data.random_split(
-            pretrain_train_data, [pretrain_len - pretrain_val_len, pretrain_val_len])
+            pretrain_train_data, [pretrain_len - pretrain_val_len, pretrain_val_len], generator=torch.Generator().manual_seed(SEED))
         finetune_train_set, finetune_val_set = torch.utils.data.random_split(
-            finetune_train_data, [finetune_len - finetune_val_len, finetune_val_len])
+            finetune_train_data, [finetune_len - finetune_val_len, finetune_val_len], generator=torch.Generator().manual_seed(SEED))
 
         self.pretrain_train_loader = torch.utils.data.DataLoader(pretrain_train_set, batch_size=batch_size, shuffle=True)
         self.pretrain_val_loader = torch.utils.data.DataLoader(pretrain_val_set, batch_size=batch_size, shuffle=False)

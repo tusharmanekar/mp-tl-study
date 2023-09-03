@@ -1,4 +1,12 @@
 import torch
+import numpy as np
+import random
+SEED = 42
+random.seed(SEED)
+np.random.seed(SEED)
+torch.manual_seed(SEED)
+torch.cuda.manual_seed(SEED)
+torch.backends.cudnn.deterministic = True
 
 def compute_layer_variances_dense(model, test_loader, device='cpu', cnn=True):
     # Define a hook to collect activations

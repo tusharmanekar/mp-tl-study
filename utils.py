@@ -10,21 +10,19 @@ else:
     activation_function = nn.Tanh
 '''
 
+import torch
 import numpy as np
-import torch, random
+import random
+SEED = 42
+random.seed(SEED)
+np.random.seed(SEED)
+torch.manual_seed(SEED)
+torch.cuda.manual_seed(SEED)
+torch.backends.cudnn.deterministic = True
+
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-###############################random seed##############################################################################
-# manualSeed = random.randint(1, 10000) # fix seed
-manualSeed = 42
-print("Random Seed: ",manualSeed)
-random.seed(manualSeed)
-torch.manual_seed(manualSeed)
-np.random.seed(manualSeed)
-#torch.cuda.manual_seed_all(manualSeed)
-# cudnn.benchmark = True
-########################################################################################################################
 
 import copy
 from data_utils import *

@@ -8,21 +8,27 @@ torch.manual_seed(SEED)
 torch.cuda.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
 
+# ACTIVATION-BASED METRIC 1: ACTIVATION VARIANCES
 def compute_layer_variances_dense(model, test_loader, device='cpu', cnn=True):
-    # Define a hook to collect activations
     activations = {}
+
+    for name, layer in model.named_modules():
+        if name:  # this ensures we skip the top-level module (the entire model) which has an empty name
+            activations[name] = []
 
     def create_hook(name):
         def hook(module, input, output):
-            activations[name] = output
+            activations[name].extend(list(torch.var(output, dim=1).detach().numpy()))
         return hook
 
 
     for name, layer in model.named_modules():
         if name:  # this ensures we skip the top-level module (the entire model) which has an empty name
+            activations[name] = []
             layer.register_forward_hook(create_hook(name))
 
     # Run inference on the test set
+    i = 0
     with torch.no_grad():
         for data, target in test_loader:
             if cnn:
@@ -30,15 +36,14 @@ def compute_layer_variances_dense(model, test_loader, device='cpu', cnn=True):
             else:
                 data, target = data.reshape([data.shape[0], -1]).to(device), target.to(device)
             outputs = model(data)
-
+            i += 1
+            
     # Calculate variance for each layer's activations
-    variances = {key: torch.var(act, dim=0) for key, act in activations.items()}
-    
     result = {}
-    for layer_name, variance in variances.items():
+    for layer_name, variances in activations.items():
         result[layer_name] = {
-            'variance': variance.mean().item(),
-            'variance_of_variance': torch.var(variance).item()
+            'variance': np.mean(variances),
+            'variance_of_variance': np.std(variances)
         }
-
-    return result, variances
+        
+    return result, activations

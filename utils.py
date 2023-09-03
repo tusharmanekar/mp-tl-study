@@ -236,7 +236,7 @@ def compute_training_acc_epochs(model, dataset, params, debug=False, save_checkp
     if save_checkpoints:
         return train_acc, test_acc, model, checkpoints
     else:
-        return train_acc, test_acc, model
+        return train_acc, test_acc, model, []
 
 def eval_cnn(model, device, dataset_loader, debug):
     model.eval()

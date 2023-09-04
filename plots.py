@@ -217,3 +217,22 @@ def plot_variances_ranges_by_layer_type(variances, results, cnn = True, ignore_f
     # Adjust the layout and display the plot
     plt.tight_layout()
     plt.show()
+
+def plot_weight_variances(weight_variances):
+    # Create lists of layer names, variances, and variances of variances
+    layer_names = list(weight_variances.keys())
+    variance_values = [weight_variances[layer]['variance'] for layer in layer_names]
+    variance_of_variance_values = [weight_variances[layer]['variance_of_variance'] for layer in layer_names]
+    
+    # Plot the variances
+    plt.figure(figsize=(10, 5))
+    plt.plot(layer_names, variance_values, label='Variance')
+    plt.plot(layer_names, variance_of_variance_values, label='Std. of Variance', linestyle='--')
+    plt.xticks(rotation=90)
+    plt.xlabel('Layer Name')
+    plt.ylabel('Value')
+    plt.title('Weight Variances and Std. of Variances')
+    plt.legend()
+    plt.grid()
+    plt.tight_layout()
+    plt.show()

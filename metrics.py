@@ -90,3 +90,33 @@ def compute_layer_variances_dense(model, test_loader, device='cpu', cnn=True):
         }
         
     return result, activations
+
+import torch
+import numpy as np
+
+def compute_weight_variances(model):
+    weight_stats = {}
+    
+    for name, layer in model.named_modules():
+        if hasattr(layer, 'weight') and layer.weight is not None:
+            # Extract the weights as a numpy array
+            weights = layer.weight.detach().cpu().numpy()
+            
+            # Calculate the variance of the weights for this layer
+            weight_var = np.var(weights)
+            
+            # Calculate the variance of the variance for this layer
+            weight_var_of_var = np.std(np.var(weights, axis=0))
+            
+            # Store these statistics
+            weight_stats[name] = {
+                'variance': weight_var,
+                'variance_of_variance': weight_var_of_var
+            }
+            
+    return weight_stats
+
+# Example usage:
+# Assuming `model` is your PyTorch model
+# weight_variances = compute_weight_variances_dense(model)
+# print(weight_variances)

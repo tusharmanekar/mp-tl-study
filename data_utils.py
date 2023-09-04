@@ -85,7 +85,7 @@ class FashionMNISTtrainer(object):
 class TransferLearningMNIST(object):
     def __init__(self, batch_size, input_dim=28*28, val_split=0.1):
         self.input_dim = input_dim
-        self.output_dim = 5
+        self.output_dim = 10
         self.val_split = val_split
 
         def filter_dataset(dataset, classes):

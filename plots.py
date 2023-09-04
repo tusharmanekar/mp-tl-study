@@ -48,7 +48,7 @@ def plot_variances(variances, results):
     plt.legend()
     plt.show()
 
-def plot_variances_by_layer_type(variances, results, cnn = True, ignore_final_layer=False, std_of_variance=False):
+def plot_variances_by_layer_type(variances, results, cnn = True, ignore_final_layer=False, std_of_variance=True):
     # Create a list of layer names and variances for fc layers
     if cnn:
         layer_type = 'conv'
@@ -92,9 +92,9 @@ def plot_variances_by_layer_type(variances, results, cnn = True, ignore_final_la
 
     # Create a figure with 2 subplots
     if std_of_variance:
-        fig, axs = plt.subplots(1, 2, figsize=(15, 10))
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
     else:
-        fig, axs = plt.subplots(1, 2, figsize=(15, 5))
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 
     # Plot the variances and variance of variances for conv layers
     axs[0].plot(conv_layer_names, conv_variance_values, label='Variance')
@@ -104,6 +104,7 @@ def plot_variances_by_layer_type(variances, results, cnn = True, ignore_final_la
     axs[0].set_xlabel('Layer Name')
     axs[0].set_ylabel('Value')
     axs[0].set_title('{} Layer Variances'.format(layer_type.upper()))
+    axs[0].grid()
     axs[0].legend()
 
     # Plot the variances and variance of variances for activation layers
@@ -114,6 +115,7 @@ def plot_variances_by_layer_type(variances, results, cnn = True, ignore_final_la
     axs[1].set_xlabel('Layer Name')
     axs[1].set_ylabel('Value')
     axs[1].set_title('Activation Layer Variances')
+    axs[1].grid()
     axs[1].legend()
 
     # Adjust the layout and display the plot
@@ -166,9 +168,9 @@ def plot_variances_ranges_by_layer_type(variances, results, cnn = True, ignore_f
 
     # Create a figure with four subplots
     if std_of_variance:
-        fig, axs = plt.subplots(1, 2, figsize=(15, 10))
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
     else:
-        fig, axs = plt.subplots(1, 2, figsize=(15, 5))
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 
     # Plot the variances and variance of variances for conv layers
     axs[0, 0].plot(conv_layer_names, conv_variance_values, label='Variance')

@@ -8,7 +8,6 @@ np.random.seed(SEED)
 # Plot activation variances of the activation layer and linear activations together, 
 # one plot with range and one without (they both have variance of variances)
 def plot_variances(variances, results):
-
     # Create a list of layer names and variances
     layer_names = list(variances.keys())
     variance_values = [variance.mean().item() for variance in variances.values()]
@@ -48,7 +47,7 @@ def plot_variances(variances, results):
     plt.legend()
     plt.show()
 
-def plot_variances_by_layer_type(variances, results, cnn = True, ignore_final_layer=False, std_of_variance=True):
+def plot_variances_by_layer_type(variances, results, cnn=True, ignore_final_layer=False, std_of_variance=False, save_path=None):
     # Create a list of layer names and variances for fc layers
     if cnn:
         layer_type = 'conv'
@@ -92,9 +91,9 @@ def plot_variances_by_layer_type(variances, results, cnn = True, ignore_final_la
 
     # Create a figure with 2 subplots
     if std_of_variance:
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        fig, axs = plt.subplots(1, 2, figsize=(15, 10))
     else:
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        fig, axs = plt.subplots(1, 2, figsize=(15, 5))
 
     # Plot the variances and variance of variances for conv layers
     axs[0].plot(conv_layer_names, conv_variance_values, label='Variance')
@@ -104,7 +103,6 @@ def plot_variances_by_layer_type(variances, results, cnn = True, ignore_final_la
     axs[0].set_xlabel('Layer Name')
     axs[0].set_ylabel('Value')
     axs[0].set_title('{} Layer Variances'.format(layer_type.upper()))
-    axs[0].grid()
     axs[0].legend()
 
     # Plot the variances and variance of variances for activation layers
@@ -115,14 +113,17 @@ def plot_variances_by_layer_type(variances, results, cnn = True, ignore_final_la
     axs[1].set_xlabel('Layer Name')
     axs[1].set_ylabel('Value')
     axs[1].set_title('Activation Layer Variances')
-    axs[1].grid()
     axs[1].legend()
 
     # Adjust the layout and display the plot
     plt.tight_layout()
-    plt.show()
+    
+    if save_path:
+        plt.savefig(save_path)
+    else:
+        plt.show()
 
-def plot_variances_ranges_by_layer_type(variances, results, cnn = True, ignore_final_layer=False, std_of_variance=True):
+def plot_variances_ranges_by_layer_type(variances, results, cnn=True, ignore_final_layer=False, std_of_variance=True, save_path=None):
     # Create a list of layer names and variances for fc layers
     if cnn:
         layer_type = 'conv'
@@ -216,9 +217,12 @@ def plot_variances_ranges_by_layer_type(variances, results, cnn = True, ignore_f
 
     # Adjust the layout and display the plot
     plt.tight_layout()
-    plt.show()
+    if save_path:
+        plt.savefig(save_path)
+    else:
+        plt.show()
 
-def plot_weight_variances(weight_variances):
+def plot_weight_variances(weight_variances, save_path=None):
     # Create lists of layer names, variances, and variances of variances
     layer_names = list(weight_variances.keys())
     variance_values = [weight_variances[layer]['variance'] for layer in layer_names]
@@ -235,4 +239,56 @@ def plot_weight_variances(weight_variances):
     plt.legend()
     plt.grid()
     plt.tight_layout()
-    plt.show()
+    if save_path:
+        plt.savefig(save_path)
+    else:
+        plt.show()
+
+def plot_acc_vs_cut(finetuned_accs, cuts, ylabel="Finetuned Training Accuracy", save_path=None):
+    plt.plot(cuts, finetuned_accs)
+    plt.xlabel('Cut')
+    plt.ylabel(ylabel)
+    plt.title('{} vs Cut'.format(ylabel))
+    if save_path:
+        plt.savefig(save_path)
+    else:
+        plt.show()
+
+def box_plot_multiple_exp(experiments, cuts, save_path=None):
+    # Initialize lists to store all accuracies for each cut point
+    train_accuracies = [[] for _ in cuts]
+    test_accuracies = [[] for _ in cuts]
+
+    # Populate the lists with accuracy values
+    for cut_models in experiments:
+        for cut, model_data in enumerate(cut_models):
+            train_accuracies[cut].append(model_data['finetuned_acc'])
+            test_accuracies[cut].append(model_data['finetuned_test_acc'])
+
+    # Create a figure with two subplots side by side
+    fig, axs = plt.subplots(1, 2, figsize=(15, 6))
+
+    # Plot training accuracies
+    axs[0].boxplot(train_accuracies)
+    axs[0].set_title('Train Accuracies across Cuts')
+    axs[0].set_xlabel('Cut Point')
+    axs[0].set_ylabel('Accuracy')
+    axs[0].set_xticks(range(1,len(cuts)+1))
+    axs[0].set_xticklabels(cuts)
+    axs[0].grid(True, which='both', linestyle='--', linewidth=0.5)
+
+    # Plot test accuracies
+    axs[1].boxplot(test_accuracies)
+    axs[1].set_title('Test Accuracies across Cuts')
+    axs[1].set_xlabel('Cut Point')
+    axs[1].set_ylabel('Accuracy')
+    axs[1].set_xticks(range(1,len(cuts)+1))
+    axs[1].set_xticklabels(cuts)
+    axs[1].grid(True, which='both', linestyle='--', linewidth=0.5)
+
+    # Display the plots
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path)
+    else:
+        plt.show()

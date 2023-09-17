@@ -28,14 +28,15 @@ import copy
 from data_utils import *
 
 # init given linear layer m with given sw and sb
-def init_weights(m, sw, sb):
+def init_weights(m, sw, sb, default_init=False):
     if type(m) == nn.Linear:
-        nn.init.normal_(m.weight, mean=0.0, std=(np.sqrt(sw / m.out_features)))
-        nn.init.normal_(m.bias, mean=0.0, std=np.sqrt(sb))
+        if default_init:
+            m.reset_parameters()
+        else:
+            nn.init.normal_(m.weight, mean=0.0, std=(np.sqrt(sw / m.out_features)))
+            nn.init.normal_(m.bias, mean=0.0, std=np.sqrt(sb))
 
 # init new model
-# TODO: activation function
-# TODO: name the layers
 def generate_fc_dnn(input_dim, output_dim, params, activation_function=nn.Tanh, gaussian_init=True):
     depth, width = params['depth'], params['width']
     
@@ -58,26 +59,6 @@ def generate_fc_dnn(input_dim, output_dim, params, activation_function=nn.Tanh, 
     if gaussian_init:
         model.apply(lambda m: init_weights(m, params['sw'], params['sb']))
     return model
-
-def generate_fc_dnn_relu(input_dim, output_dim, params):
-    depth, width = params['depth'], params['width']
-    def gen_linear_layer_dim(layer_index):
-        return {
-            0: (input_dim, width),
-            depth - 1: (width, output_dim),
-        }.get(layer_index, (width, width))
-
-    fc_list = list()
-    for i in range(depth):
-        fc_list += [
-            nn.Linear(*gen_linear_layer_dim(i)),
-            nn.LogSoftmax(dim=1) if (depth - 1 == i) else nn.ReLU()
-        ]
-    model = nn.Sequential(*fc_list)
-    model.apply(lambda m: init_weights(m, params['sw'], params['sb']))
-    return model
-
-import torch.nn as nn
 
 class CustomCNN(nn.Module):
     def __init__(self, input_dim, output_dim, depth, num_channels, act_fn, use_pooling=True):
@@ -120,7 +101,7 @@ def generate_cnn(input_dim, output_dim, depth, num_channels, act_fn=nn.ReLU, use
 
 
 # dataset_loader is fine-tuning dataset
-def eval(model, device, dataset_loader, debug):
+def eval(model, device, dataset_loader, debug=False, logger=print):
     model.eval()
     test_loss, correct = 0., 0.
     with torch.no_grad():
@@ -138,12 +119,12 @@ def eval(model, device, dataset_loader, debug):
     test_loss /= num_data
     acc = correct / num_data
     if debug:
-        print('\nTrain set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.
+        logger('\nTrain set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.
               format(test_loss, correct, num_data, 100. * acc))
 
     return acc
 
-def compute_training_acc(model, dataset, params, debug=False):
+def compute_training_acc(model, dataset, params, debug=False, logger=print):
     device = torch.device(params['device'])
     optimizer = optim.SGD(model.parameters(), lr=params['lr'])
     # if debug: print(model, optimizer)
@@ -162,17 +143,17 @@ def compute_training_acc(model, dataset, params, debug=False):
         # Evaluate after every 10 steps epoch
         if debug and batch_idx % 10 == 0:
             train_acc = eval(model, device, dataset.train_loader, debug=False)
-            print('Step: {} \tTraining Accuracy: {:.2f}%'.format(batch_idx, train_acc*100))
+            logger('Step: {} \tTraining Accuracy: {:.2f}%'.format(batch_idx, train_acc*100))
             # if debug and (epoch+1) % 1 == 0:
             val_acc = eval(model, device, dataset.val_loader, debug=False)
-            print('\t\tValidation Accuracy: {:.2f}%'.format(val_acc*100))
+            logger('\t\tValidation Accuracy: {:.2f}%'.format(val_acc*100))
 
     train_acc = eval(model, device, dataset.train_loader, debug=False)
     test_acc = eval(model, device, dataset.test_loader, debug=False)
     return train_acc, test_acc, model
 
 # like previous function, but run for given number of epochs determined by params['num_train']
-def compute_training_acc_epochs(model, dataset, params, debug=False, save_checkpoints=False):
+def compute_training_acc_epochs(model, dataset, params, debug=False, return_checkpoints=False, save_checkpoints=False, logger=print):
     device = torch.device(params['device'])
     optimizer = optim.SGD(model.parameters(), lr=params['lr'])   
     # if debug: print(model, optimizer)
@@ -196,16 +177,16 @@ def compute_training_acc_epochs(model, dataset, params, debug=False, save_checkp
             optimizer.step()
 
             if debug and batch_idx % 20 == 0:
-                #print('Epoch: {} Train step: {} \tLoss: {:.6f}'.format(epoch, batch_idx, loss.item()))
+                #logger('Epoch: {} Train step: {} \tLoss: {:.6f}'.format(epoch, batch_idx, loss.item()))
                 pass
 
         # Evaluate after each epoch
         if debug:
             train_acc = eval(model, device, dataset.train_loader, debug=False)
-            print('Epoch: {} \tTraining Accuracy: {:.2f}%'.format(epoch, train_acc*100))
+            logger('Epoch: {} \tTraining Accuracy: {:.2f}%'.format(epoch, train_acc*100))
             # if debug and (epoch+1) % 1 == 0:
             val_acc = eval(model, device, dataset.val_loader, debug=False)
-            print('Validation Accuracy: {:.2f}%'.format(val_acc*100))
+            logger('Validation Accuracy: {:.2f}%'.format(val_acc*100))
 
             if params['early_stop_patience']:
                 if val_acc > max_val_acc:
@@ -213,12 +194,12 @@ def compute_training_acc_epochs(model, dataset, params, debug=False, save_checkp
                     no_improve_epochs = 0
                 else:
                     no_improve_epochs += 1
-                    print("val_acc: {}, max_val_acc: {}, no_improve_epochs: {}".format(val_acc, max_val_acc, no_improve_epochs))
+                    logger("val_acc: {}, max_val_acc: {}, no_improve_epochs: {}".format(val_acc, max_val_acc, no_improve_epochs))
                     if no_improve_epochs >= params['early_stop_patience']:
-                        print("Early stopping invoked.")
+                        logger("Early stopping invoked.")
                         break
         
-        if save_checkpoints:
+        if return_checkpoints or save_checkpoints:
             # Save checkpoint after each epoch
             checkpoint = {
                 'epoch': epoch,
@@ -227,18 +208,19 @@ def compute_training_acc_epochs(model, dataset, params, debug=False, save_checkp
                 'train_acc': train_acc,
                 'val_acc': val_acc
             }
-            torch.save(checkpoint, 'checkpoint_epoch_{}.pth'.format(epoch))
             checkpoints.append(checkpoint)
+        if save_checkpoints:
+            torch.save(checkpoint, 'checkpoint_epoch_{}.pth'.format(epoch))
 
     # Final evaluation after all epochs are completed
     train_acc = eval(model, device, dataset.train_loader, debug=False)
     test_acc = eval(model, device, dataset.test_loader, debug=False)
-    if save_checkpoints:
+    if save_checkpoints or return_checkpoints:
         return train_acc, test_acc, model, checkpoints
     else:
         return train_acc, test_acc, model, []
 
-def eval_cnn(model, device, dataset_loader, debug):
+def eval_cnn(model, device, dataset_loader, debug=False, logger=print):
     model.eval()
     test_loss, correct = 0., 0.
     with torch.no_grad():
@@ -253,16 +235,16 @@ def eval_cnn(model, device, dataset_loader, debug):
     test_loss /= num_data
     acc = correct / num_data
     if debug:
-        print('\nTrain set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, num_data, 100. * acc))
+        logger('\nTrain set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(test_loss, correct, num_data, 100. * acc))
 
     return acc
 
-def compute_training_acc_epochs_cnn(model, dataset, params, debug=False):
+def compute_training_acc_epochs_cnn(model, dataset, params, debug=False, logger=print):
     device = torch.device(params['device'])
     optimizer = optim.SGD(model.parameters(), lr=params['lr'])
     
     if debug: 
-        print(model, optimizer)
+        logger(model, optimizer)
 
     train_acc = 0.0
     model.train()
@@ -283,21 +265,19 @@ def compute_training_acc_epochs_cnn(model, dataset, params, debug=False):
         # Evaluate after each epoch
         if debug:
             train_acc = eval_cnn(model, device, dataset.train_loader, debug=False)
-            print('Epoch: {} \tTraining Accuracy: {:.2f}%'.format(epoch, train_acc*100))
+            logger('Epoch: {} \tTraining Accuracy: {:.2f}%'.format(epoch, train_acc*100))
             if debug and (epoch+1) % 1 == 0:
                 val_acc = eval_cnn(model, device, dataset.val_loader, debug=False)
-                print('Validation Accuracy: {:.2f}%'.format(val_acc*100))
+                logger('Validation Accuracy: {:.2f}%'.format(val_acc*100))
                 
     # Final evaluation after all epochs are completed
     train_acc = eval_cnn(model, device, dataset.train_loader, debug=False)
     test_acc = eval_cnn(model, device, dataset.test_loader, debug=False)
     return train_acc, test_acc, model
 
-
-
 # cut_point: no. of layers to keep in the model
 # reinitialize after cutting point using init_weights function
-def cut_model(model, sw = 1, sb = 1, cut_point=1, freeze=True):
+def cut_model(model, sw = 1, sb = 1, gaussian_init=True, cut_point=1, freeze=True, reinitialize=True):
     #deepcopy to avoid changing the original model
     model = copy.deepcopy(model)
     # Convert sequential model to list of layers
@@ -321,8 +301,9 @@ def cut_model(model, sw = 1, sb = 1, cut_point=1, freeze=True):
         linear_layer = layers[2*i]
         activation = layers[2*i + 1]
 
-        # Apply initialization
-        init_weights(linear_layer, sw, sb)
+        if reinitialize:
+            # Apply initialization
+            init_weights(linear_layer, sw, sb, default_init=not gaussian_init)
 
         # Append to new layers
         new_layers.extend([linear_layer, activation])

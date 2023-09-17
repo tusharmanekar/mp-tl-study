@@ -91,9 +91,6 @@ def compute_layer_variances_dense(model, test_loader, device='cpu', cnn=True):
         
     return result, activations
 
-import torch
-import numpy as np
-
 def compute_weight_variances(model):
     weight_stats = {}
     

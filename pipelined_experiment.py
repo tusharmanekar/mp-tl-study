@@ -42,6 +42,10 @@ def plot_variances(model, loader, save_path=None):
     plot_variances_by_layer_type(variances, results, cnn=args.cnn, ignore_final_layer=True, 
                                  std_of_variance=args.std_of_variances, save_path=save_path)
 
+def plot_weight_stats(model, save_path=None):
+    weight_variances = compute_weight_variances(model)
+    plot_weight_variances(weight_variances, save_path=save_path)
+
 # if we can want we can do this later after saving and reloading the checkpoints
 # otherwise need to change the training function
 def plot_variances_epochs(model, loader, save_path):
@@ -86,10 +90,10 @@ if __name__ == "__main__":
     # -------------------------------------------- SETUP -------------------------------------------
     print("SETUP")
     logger.info("\n\n Pretraining the model:")
-    batch_size = 128
-    lr=0.01
+    batch_size = 256
+    lr=0.05
     num_train=10
-    early_stop_patience = 4
+    early_stop_patience = 5
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # device = 'cpu'
     params = dict(device=device, batch_size=batch_size,
@@ -130,7 +134,7 @@ if __name__ == "__main__":
     
     print("     saving the variances")
     plot_variances(model, dataset_wrapped.train_loader, os.path.join(folder, 'variances_on_pretraining_set.png'))
-    # plot_variances(model, dataset_wrapped.train_loader)
+    plot_weight_stats(model, save_path=os.path.join(folder, 'weight_stats.png'))
     
     # --------------------------------- 2. PRETRAINED MODEL AND PLOTS ---------------------------------------
     print("2. PRETRAINED MODEL AND PLOTS")
@@ -151,6 +155,7 @@ if __name__ == "__main__":
     # Save plots
     plot_variances(pre_trained_model, dataset_wrapped.train_loader, os.path.join(folder, 'variances_on_pretraining_set.png'))
     plot_variances(pre_trained_model, dataset.finetune_train_loader, os.path.join(folder, 'variances_on_finetuning_set.png'))
+    plot_weight_stats(pre_trained_model, save_path=os.path.join(folder, 'weight_stats.png'))
 
     # ----------------------------------- 3. FINE-TUNING ----------------------------------------------------------
     print("3. FINE-TUNING")
@@ -170,7 +175,6 @@ if __name__ == "__main__":
         plot_acc_vs_cut(finetuned_train_accs, cuts=range(0, args.depth, args.cuts_skip), ylabel="Finetuned Train Accuracy", save_path=os.path.join(folder, 'train_acc_vs_cut.png'))
         plot_acc_vs_cut(finetuned_test_accs, cuts=range(0, args.depth, args.cuts_skip), ylabel="Finetuned Test Accuracy", save_path=os.path.join(folder, 'test_acc_vs_cut.png'))
 
-        cut_models = experiments[0]
         for i,cut_model in enumerate(cut_models):
             model_folder = os.path.join(folder, 'cut_{}'.format(i*args.cuts_skip))
             os.mkdir(model_folder)
@@ -181,6 +185,7 @@ if __name__ == "__main__":
             
             # Save plots
             plot_variances(cut_model['finetuned_model'], dataset_wrapped.train_loader, os.path.join(model_folder, 'variances_on_finetuning_set.png'))
+            plot_weight_stats(cut_model['finetuned_model'], save_path=os.path.join(model_folder, 'weight_stats.png'))
 
             # save fine_tuning results
             del cut_model['cut_model']

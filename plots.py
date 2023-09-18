@@ -226,22 +226,38 @@ def plot_variances_ranges_by_layer_type(variances, results, cnn=True, ignore_fin
         plt.show()
 
 # HELPER FUNCTION: metrics.compute_weight_variances
-def plot_weight_variances(weight_variances, save_path=None):
+def plot_weight_variances(weight_variances, variance_of_variance=False,  save_path=None):
     # Create lists of layer names, variances, and variances of variances
     layer_names = list(weight_variances.keys())
+    mean_values = [weight_variances[layer]['mean'] for layer in layer_names]
     variance_values = [weight_variances[layer]['variance'] for layer in layer_names]
     variance_of_variance_values = [weight_variances[layer]['variance_of_variance'] for layer in layer_names]
     
-    # Plot the variances
-    plt.figure(figsize=(10, 5))
-    plt.plot(layer_names, variance_values, label='Variance')
-    plt.plot(layer_names, variance_of_variance_values, label='Std. of Variance', linestyle='--')
-    plt.xticks(rotation=90)
-    plt.xlabel('Layer Name')
-    plt.ylabel('Value')
-    plt.title('Weight Variances and Std. of Variances')
-    plt.legend()
-    plt.grid()
+    # Create a figure with 2 subplots
+    if variance_of_variance:
+        fig, axs = plt.subplots(1, 2, figsize=(15, 10))
+    else:
+        fig, axs = plt.subplots(1, 2, figsize=(15, 5))
+
+    # Plot the variances and variance of variances for conv layers
+    axs[0].plot(layer_names, mean_values, label='Mean')
+    axs[0].set_xticklabels(layer_names, rotation=90)
+    axs[0].set_xlabel('Layer Name')
+    axs[0].set_ylabel('Mean of Weights')
+    axs[0].set_title('Mean of Weights of Linear Layers')
+    axs[0].legend()
+
+    # Plot the variances and variance of variances for activation layers
+    axs[1].plot(layer_names, variance_values, label='Variance')
+    if variance_of_variance:
+        axs[1].plot(layer_names, variance_of_variance_values, linestyle='--', label='Variance of Variance')
+    axs[1].set_xticklabels(layer_names, rotation=90)
+    axs[1].set_xlabel('Layer Name')
+    axs[1].set_ylabel('Variance of Weights')
+    axs[1].set_title('Variance of Weights of Linear Layers')
+    axs[1].legend()
+
+    # Adjust the layout and display the plot
     plt.tight_layout()
     if save_path:
         plt.savefig(save_path)

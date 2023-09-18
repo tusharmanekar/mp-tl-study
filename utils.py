@@ -164,23 +164,23 @@ def compute_training_acc_epochs(model, dataset, params, debug=False, return_chec
                 pass
 
         # Evaluate after each epoch
-        if debug:
-            train_acc = eval(model, device, dataset.train_loader, debug=False)
+        train_acc = eval(model, device, dataset.train_loader, debug=False)
+        val_acc = eval(model, device, dataset.val_loader, debug=False)
+        if debug: 
             logger('Epoch: {} \tTraining Accuracy: {:.2f}%'.format(epoch, train_acc*100))
-            # if debug and (epoch+1) % 1 == 0:
-            val_acc = eval(model, device, dataset.val_loader, debug=False)
+            # if debug and (epoch+1) % 1 == 0:  
             logger('Validation Accuracy: {:.2f}%'.format(val_acc*100))
 
-            if params['early_stop_patience']:
-                if val_acc > max_val_acc:
-                    max_val_acc = val_acc
-                    no_improve_epochs = 0
-                else:
-                    no_improve_epochs += 1
-                    logger("val_acc: {}, max_val_acc: {}, no_improve_epochs: {}".format(val_acc, max_val_acc, no_improve_epochs))
-                    if no_improve_epochs >= params['early_stop_patience']:
-                        logger("Early stopping invoked.")
-                        break
+        if params['early_stop_patience']:
+            if val_acc > max_val_acc:
+                max_val_acc = val_acc
+                no_improve_epochs = 0
+            else:
+                no_improve_epochs += 1
+                logger("val_acc: {}, max_val_acc: {}, no_improve_epochs: {}".format(val_acc, max_val_acc, no_improve_epochs))
+                if no_improve_epochs >= params['early_stop_patience']:
+                    logger("Early stopping invoked.")
+                    break
         
         if return_checkpoints or save_checkpoints:
             # Save checkpoint after each epoch
@@ -245,7 +245,7 @@ def multiple_fine_tuning_experiments(num_experiments, cuts, pre_trained_model, d
     experiments = []
     for i in range(num_experiments):
         if debug:
-            logger('\n\nExperiment number: ', i)
+            logger('\n\nExperiment number: {}'.format(i))
         cut_models = []
         for cut in cuts:
             temp = {}

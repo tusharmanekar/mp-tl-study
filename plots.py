@@ -47,6 +47,7 @@ def plot_variances(variances, results):
     plt.tight_layout()
     plt.legend()
     plt.show()
+    plt.close()
 
 # HELPER FUNCTION: metrics.compute_layer_variances_dense
 def plot_variances_by_layer_type(variances, results, cnn=True, ignore_final_layer=False, std_of_variance=False, save_path=None):
@@ -124,6 +125,7 @@ def plot_variances_by_layer_type(variances, results, cnn=True, ignore_final_laye
         plt.savefig(save_path)
     else:
         plt.show()
+    plt.close()
 
 # HELPER FUNCTION: metrics.compute_layer_variances_dense
 def plot_variances_ranges_by_layer_type(variances, results, cnn=True, ignore_final_layer=False, std_of_variance=True, save_path=None):
@@ -224,9 +226,10 @@ def plot_variances_ranges_by_layer_type(variances, results, cnn=True, ignore_fin
         plt.savefig(save_path)
     else:
         plt.show()
+    plt.close()
 
 # HELPER FUNCTION: metrics.compute_weight_variances
-def plot_weight_variances(weight_variances, variance_of_variance=False,  save_path=None):
+def plot_weight_variances(weight_variances, variance_of_variance=False, save_path=None, ignore_final_layer=False):
     # Create lists of layer names, variances, and variances of variances
     layer_names = list(weight_variances.keys())
     mean_values = [weight_variances[layer]['mean'] for layer in layer_names]
@@ -238,6 +241,12 @@ def plot_weight_variances(weight_variances, variance_of_variance=False,  save_pa
         fig, axs = plt.subplots(1, 2, figsize=(15, 10))
     else:
         fig, axs = plt.subplots(1, 2, figsize=(15, 5))
+
+    if ignore_final_layer:
+        layer_names = layer_names[:-1]
+        mean_values = mean_values[:-1]
+        variance_values = variance_values[:-1]
+        variance_of_variance_values = variance_of_variance_values[:-1]
 
     # Plot the variances and variance of variances for conv layers
     axs[0].plot(layer_names, mean_values, label='Mean')
@@ -263,16 +272,35 @@ def plot_weight_variances(weight_variances, variance_of_variance=False,  save_pa
         plt.savefig(save_path)
     else:
         plt.show()
+    plt.close()
 
-def plot_acc_vs_cut(finetuned_accs, cuts, ylabel="Finetuned Training Accuracy", save_path=None):
-    plt.plot(cuts, finetuned_accs)
-    plt.xlabel('Cut')
-    plt.ylabel(ylabel)
-    plt.title('{} vs Cut'.format(ylabel))
+def plot_acc_vs_cut(finetuned_accs, cuts, save_path=None):
+    names = [str(cut)+str(1) for cut in cuts]
+
+    fig, axs = plt.subplots(1, 2, figsize=(15, 5))
+    # Plot the variances and variance of variances for conv layers
+    axs[0].plot(range(1,len(cuts)+1), finetuned_accs['train'], label='Mean')
+    axs[0].set_xticklabels(names, rotation=90)
+    axs[0].set_xlabel('Cut')
+    axs[0].set_ylabel('Accuracy')
+    axs[0].set_title('Train Accuracy on Fine-tuning Set per Cut')
+    axs[0].legend()
+
+    # Plot the variances and variance of variances for activation layers
+    axs[1].plot(range(1,len(cuts)+1), finetuned_accs['test'], label='Variance')
+    axs[1].set_xticklabels(names, rotation=90)
+    axs[1].set_xlabel('Cut')
+    axs[1].set_ylabel('Accuracy')
+    axs[1].set_title('Train Accuracy on Fine-tuning Set per Cut')
+    axs[1].legend()
+
+    # Adjust the layout and display the plot
+    plt.tight_layout()
     if save_path:
         plt.savefig(save_path)
     else:
         plt.show()
+    plt.close()
 
 # HELPER FUNCTION: utils.multiple_fine_tuning_experiments
 def box_plot_multiple_exp(experiments, cuts, save_path=None):
@@ -313,6 +341,7 @@ def box_plot_multiple_exp(experiments, cuts, save_path=None):
         plt.savefig(save_path)
     else:
         plt.show()
+    plt.close()
 
 # not sure if it works with torch Dataloader yet
 def plot_decision_boundary(model, X, y, n_classes, loader=None):
@@ -341,3 +370,4 @@ def plot_decision_boundary(model, X, y, n_classes, loader=None):
     plt.legend(loc='upper left')
 
     plt.show()
+    plt.close()

@@ -39,12 +39,12 @@ torch.backends.cudnn.deterministic = True
 # plot and save the variances for any model and given dataset propagated through the model
 def plot_variances(model, loader, save_path=None):
     results, variances = compute_layer_variances_dense(model, loader, device=params['device'], cnn=args.cnn)
-    plot_variances_by_layer_type(variances, results, cnn=args.cnn, ignore_final_layer=True, 
+    plot_variances_by_layer_type(variances, results, cnn=args.cnn, ignore_final_layer=not args.last_layer, 
                                  std_of_variance=args.std_of_variances, save_path=save_path)
 
 def plot_weight_stats(model, save_path=None):
     weight_variances = compute_weight_variances(model)
-    plot_weight_variances(weight_variances, save_path=save_path)
+    plot_weight_variances(weight_variances, save_path=save_path, ignore_final_layer=not args.last_layer)
 
 # if we can want we can do this later after saving and reloading the checkpoints
 # otherwise need to change the training function
@@ -67,6 +67,8 @@ if __name__ == "__main__":
     parser.add_argument("-cuts", "--cuts_skip", default=1, type=int, help="For example if this is 10 then we fine-tune every 10th cut (0,10,20,..)")
     parser.add_argument("-f", "--freeze", default=False, action='store_true', help="Freeze the layers before the cut")
     parser.add_argument("-r", "--reinitialize", default=False, action='store_true', help="if true, we reinitialize the layers after the cut")
+    parser.add_argument("-last", "--last_layer", default=False, action='store_true', help="if True include the final layer in the plots")
+    
     parser.add_argument("-o", "--out_path", required=True, help="path to the output folder")
     
     args = parser.parse_args()
@@ -92,8 +94,8 @@ if __name__ == "__main__":
     logger.info("\n\n Pretraining the model:")
     batch_size = 256
     lr=0.05
-    num_train=10
-    early_stop_patience = 5
+    num_train=1
+    early_stop_patience = 3
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # device = 'cpu'
     params = dict(device=device, batch_size=batch_size,
@@ -172,8 +174,8 @@ if __name__ == "__main__":
         cut_models = experiments[0]
         finetuned_train_accs = [model['finetuned_acc'] for model in cut_models]
         finetuned_test_accs = [model['finetuned_test_acc'] for model in cut_models]
-        plot_acc_vs_cut(finetuned_train_accs, cuts=range(0, args.depth, args.cuts_skip), ylabel="Finetuned Train Accuracy", save_path=os.path.join(folder, 'train_acc_vs_cut.png'))
-        plot_acc_vs_cut(finetuned_test_accs, cuts=range(0, args.depth, args.cuts_skip), ylabel="Finetuned Test Accuracy", save_path=os.path.join(folder, 'test_acc_vs_cut.png'))
+        fine_tuned_acc = {'train':finetuned_train_accs, 'test':finetuned_test_accs}
+        plot_acc_vs_cut(fine_tuned_acc, cuts=range(0, args.depth, args.cuts_skip), save_path=os.path.join(folder, 'train_acc_vs_cut.png'))
 
         for i,cut_model in enumerate(cut_models):
             model_folder = os.path.join(folder, 'cut_{}'.format(i*args.cuts_skip))

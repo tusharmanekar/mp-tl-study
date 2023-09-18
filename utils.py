@@ -261,7 +261,7 @@ def multiple_fine_tuning_experiments(num_experiments, cuts, pre_trained_model, d
             temp['checkpoints'] = checkpoints_temp
             cut_models.append(temp)  
         experiments.append(cut_models)
-        return experiments
+    return experiments
 # -----------------------------------------------------------------------------------------------------------------------------------
 # ------------------------------------------- CNNS (will need some updating) --------------------------------------------
 # -----------------------------------------------------------------------------------------------------------------------------------

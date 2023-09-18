@@ -157,13 +157,14 @@ if __name__ == "__main__":
     folder = os.path.join(args.out_path, 'after_fine_tuning')
     os.mkdir(folder)
 
-    print("     The repeated efine-tuning experiments in progress")
+    print("     The repeated fine-tuning experiments in progress")
     dataset_wrapped.update_phase('finetune')
     experiments = multiple_fine_tuning_experiments(args.num_experiments, range(0, args.depth, args.cuts_skip), pre_trained_model, dataset_wrapped, params, freeze=args.freeze, reinitialize=args.reinitialize, debug=True, logger=logger.info)
        
     print("     Saving everything and finishing up")
     # Save all the fine-tuned models and their variance graphs
     if len(experiments) == 1:
+        cut_models = experiments[0]
         finetuned_train_accs = [model['finetuned_acc'] for model in cut_models]
         finetuned_test_accs = [model['finetuned_test_acc'] for model in cut_models]
         plot_acc_vs_cut(finetuned_train_accs, cuts=range(0, args.depth, args.cuts_skip), ylabel="Finetuned Train Accuracy", save_path=os.path.join(folder, 'train_acc_vs_cut.png'))

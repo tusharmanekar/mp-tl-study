@@ -28,6 +28,7 @@ else:
 
     To just use the print function, no need to specify the logger:  multiple_fine_tuning_experiments(num_experiments, cuts, pre_trained_model, dataset_wrapped, params, debug=True)
 '''
+__version__ = '1.1'
 
 import torch
 import numpy as np

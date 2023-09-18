@@ -111,24 +111,24 @@ if __name__ == "__main__":
     folder = os.path.join(args.out_path, 'before_pretraining')
     os.mkdir(folder)
     
-    print("save the untrained model")
+    print("     save the untrained model")
     del params['device']
     with open(os.path.join(folder, "model_params.json"), "w+") as f:
         json.dump(params, f, indent=2, ensure_ascii=False)  # encode dict into JSON
     params['device'] = device
     
-    print("loading the dataset")
+    print("     loading the dataset")
     dataset = TransferLearningMNIST(batch_size)
     dataset_wrapped = TransferLearningMNISTWrapper(dataset, 'pretrain')
     
-    print("generate the model")
+    print("     generate the model")
     if not args.cnn:
         model = generate_fc_dnn(dataset.input_dim, dataset.output_dim,
                 params, activation_function=activation_function, gaussian_init=args.gaussian_init).to(device)
     else:
         model = generate_cnn(dataset.input_dim, dataset.output_dim, params['depth'], params['width'], act_fn=activation_function, use_pooling=False)
     
-    print("saving the variances")
+    print("     saving the variances")
     plot_variances(model, dataset_wrapped.train_loader, os.path.join(folder, 'variances_on_pretraining_set.png'))
     # plot_variances(model, dataset_wrapped.train_loader)
     
@@ -156,28 +156,12 @@ if __name__ == "__main__":
     print("3. FINE-TUNING")
     folder = os.path.join(args.out_path, 'after_fine_tuning')
     os.mkdir(folder)
-    
+
+    print("     The repeated efine-tuning experiments in progress")
     dataset_wrapped.update_phase('finetune')
-
-    num_experiments = args.num_experiments
-    experiments = []
-
-    for i in tqdm(range(num_experiments)):
-        print('experiment number: ', i)
-        cut_models = []
-        for cut in tqdm(range(0, args.depth, args.cuts_skip)):
-            temp = {}
-            temp['cut_model'] = cut_model(pre_trained_model, cut_point=cut, freeze=args.freeze, reinitialize=args.reinitialize)
-            logger.info("\n\nCut: {}".format(cut))
-            finetuned_acc, finetuned_test_acc, finetuned_model, checkpoints_temp = compute_training_acc_epochs(temp['cut_model'], dataset_wrapped, params, debug=True, save_checkpoints=False, return_checkpoints=True, logger=logger.info)
-            temp['finetuned_acc'] = finetuned_acc
-            temp['finetuned_test_acc'] = finetuned_test_acc
-            temp['finetuned_model'] = finetuned_model
-            temp['checkpoints'] = checkpoints_temp
-            cut_models.append(temp)  
-        experiments.append(cut_models)
+    experiments = multiple_fine_tuning_experiments(args.num_experiments, range(0, args.depth, args.cuts_skip), pre_trained_model, dataset_wrapped, params, freeze=args.freeze, reinitialize=args.reinitialize, debug=True, logger=logger.info)
        
-    print("Saving everything and finishing up")
+    print("     Saving everything and finishing up")
     # Save all the fine-tuned models and their variance graphs
     if len(experiments) == 1:
         finetuned_train_accs = [model['finetuned_acc'] for model in cut_models]

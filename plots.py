@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import torch
 
 SEED = 42
 import numpy as np
@@ -47,6 +48,7 @@ def plot_variances(variances, results):
     plt.legend()
     plt.show()
 
+# HELPER FUNCTION: metrics.compute_layer_variances_dense
 def plot_variances_by_layer_type(variances, results, cnn=True, ignore_final_layer=False, std_of_variance=False, save_path=None):
     # Create a list of layer names and variances for fc layers
     if cnn:
@@ -123,6 +125,7 @@ def plot_variances_by_layer_type(variances, results, cnn=True, ignore_final_laye
     else:
         plt.show()
 
+# HELPER FUNCTION: metrics.compute_layer_variances_dense
 def plot_variances_ranges_by_layer_type(variances, results, cnn=True, ignore_final_layer=False, std_of_variance=True, save_path=None):
     # Create a list of layer names and variances for fc layers
     if cnn:
@@ -222,6 +225,7 @@ def plot_variances_ranges_by_layer_type(variances, results, cnn=True, ignore_fin
     else:
         plt.show()
 
+# HELPER FUNCTION: metrics.compute_weight_variances
 def plot_weight_variances(weight_variances, save_path=None):
     # Create lists of layer names, variances, and variances of variances
     layer_names = list(weight_variances.keys())
@@ -254,6 +258,7 @@ def plot_acc_vs_cut(finetuned_accs, cuts, ylabel="Finetuned Training Accuracy", 
     else:
         plt.show()
 
+# HELPER FUNCTION: utils.multiple_fine_tuning_experiments
 def box_plot_multiple_exp(experiments, cuts, save_path=None):
     # Initialize lists to store all accuracies for each cut point
     train_accuracies = [[] for _ in cuts]
@@ -292,3 +297,31 @@ def box_plot_multiple_exp(experiments, cuts, save_path=None):
         plt.savefig(save_path)
     else:
         plt.show()
+
+# not sure if it works with torch Dataloader yet
+def plot_decision_boundary(model, X, y, n_classes, loader=None):
+    if loader:
+        X = loader.dataset.dataset.data.numpy()
+        y = loader.dataset.dataset.targets.numpy()
+    x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
+    y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
+    xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.1),
+                         np.arange(y_min, y_max, 0.1))
+
+    with torch.no_grad():
+        model.eval()
+        Z = model(torch.FloatTensor(np.c_[xx.ravel(), yy.ravel()])).numpy()
+        Z = np.argmax(Z, axis=1)
+
+    Z = Z.reshape(xx.shape)
+    plt.contourf(xx, yy, Z, alpha=0.8)
+    plt.scatter(X[:, 0], X[:, 1], c=y, edgecolors='k', marker='o', linewidth=1)
+    plt.title("Decision Boundary")
+    plt.xlabel("X-axis")
+    plt.ylabel("Y-axis")
+
+    for i in range(n_classes):
+        plt.scatter([], [], c='k', alpha=0.8, s=20, label=f"Class {i}")
+    plt.legend(loc='upper left')
+
+    plt.show()

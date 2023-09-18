@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 from utils import __version__
 
 setup(
-    name='MP utilities and functions',
+    name='MP_functions',
     version=__version__,
 
     url='https://github.com/tusharmanekar/mp-tl-study',

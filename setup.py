@@ -1,17 +1,16 @@
 from setuptools import setup, find_packages
 
-from utils import __version__
+from utils import *
+from data_utils import *
+from plots import *
+from metrics import *
 
 setup(
     name='MP_functions',
-    version=__version__,
-
+    version='1.1',
     url='https://github.com/tusharmanekar/mp-tl-study',
     author='Tushar, David and Arnisa',
     author_email='email@gmail.com',
 
-    install_requires=[
-        'returns-decorator',
-    ],
-    packages=find_packages()
+    packages=find_packages(),
 )

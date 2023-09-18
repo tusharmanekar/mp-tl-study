@@ -209,7 +209,7 @@ def cut_model(model, sw = 1, sb = 1, gaussian_init=True, cut_point=1, freeze=Tru
     #deepcopy to avoid changing the original model
     model = copy.deepcopy(model)
     # Convert sequential model to list of layers
-    layers = list(model.children())
+    layers = list(model.named_children())
 
     # Check if cut_point is out of range
     if cut_point < 0 or cut_point >= len(layers) // 2:
@@ -218,7 +218,7 @@ def cut_model(model, sw = 1, sb = 1, gaussian_init=True, cut_point=1, freeze=Tru
     # If freeze is True, set requires_grad to False for layers before cut_point
     if freeze:
         for i in range(cut_point):
-            for param in layers[2*i].parameters():
+            for param in layers[2*i][1].parameters():
                 param.requires_grad = False
 
     # Cut layers
@@ -237,7 +237,10 @@ def cut_model(model, sw = 1, sb = 1, gaussian_init=True, cut_point=1, freeze=Tru
         new_layers.extend([linear_layer, activation])
 
     # Return new model
-    return nn.Sequential(*new_layers)
+    model = nn.Sequential()
+    for name, layer in new_layers:
+        setattr(model, name, layer)
+    return model
 
 # If num_experiments == 1: after getting the outputs  cut_models = experiments[0] and then this is a simple fine-tuning experiment
 # Don't forget to switch the dataset to the fine-tuning:    dataset_wrapped.update_phase('finetune')  before calling this function

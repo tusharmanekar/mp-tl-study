@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import torch
 
 SEED = 42
 import numpy as np
@@ -46,7 +47,9 @@ def plot_variances(variances, results):
     plt.tight_layout()
     plt.legend()
     plt.show()
+    plt.close()
 
+# HELPER FUNCTION: metrics.compute_layer_variances_dense
 def plot_variances_by_layer_type(variances, results, cnn=True, ignore_final_layer=False, std_of_variance=False, save_path=None):
     # Create a list of layer names and variances for fc layers
     if cnn:
@@ -122,7 +125,9 @@ def plot_variances_by_layer_type(variances, results, cnn=True, ignore_final_laye
         plt.savefig(save_path)
     else:
         plt.show()
+    plt.close()
 
+# HELPER FUNCTION: metrics.compute_layer_variances_dense
 def plot_variances_ranges_by_layer_type(variances, results, cnn=True, ignore_final_layer=False, std_of_variance=True, save_path=None):
     # Create a list of layer names and variances for fc layers
     if cnn:
@@ -221,39 +226,83 @@ def plot_variances_ranges_by_layer_type(variances, results, cnn=True, ignore_fin
         plt.savefig(save_path)
     else:
         plt.show()
+    plt.close()
 
-def plot_weight_variances(weight_variances, save_path=None):
+# HELPER FUNCTION: metrics.compute_weight_variances
+def plot_weight_variances(weight_variances, variance_of_variance=False, save_path=None, ignore_final_layer=False):
     # Create lists of layer names, variances, and variances of variances
     layer_names = list(weight_variances.keys())
+    mean_values = [weight_variances[layer]['mean'] for layer in layer_names]
     variance_values = [weight_variances[layer]['variance'] for layer in layer_names]
     variance_of_variance_values = [weight_variances[layer]['variance_of_variance'] for layer in layer_names]
     
-    # Plot the variances
-    plt.figure(figsize=(10, 5))
-    plt.plot(layer_names, variance_values, label='Variance')
-    plt.plot(layer_names, variance_of_variance_values, label='Std. of Variance', linestyle='--')
-    plt.xticks(rotation=90)
-    plt.xlabel('Layer Name')
-    plt.ylabel('Value')
-    plt.title('Weight Variances and Std. of Variances')
-    plt.legend()
-    plt.grid()
+    # Create a figure with 2 subplots
+    if variance_of_variance:
+        fig, axs = plt.subplots(1, 2, figsize=(15, 10))
+    else:
+        fig, axs = plt.subplots(1, 2, figsize=(15, 5))
+
+    if ignore_final_layer:
+        layer_names = layer_names[:-1]
+        mean_values = mean_values[:-1]
+        variance_values = variance_values[:-1]
+        variance_of_variance_values = variance_of_variance_values[:-1]
+
+    # Plot the variances and variance of variances for conv layers
+    axs[0].plot(layer_names, mean_values, label='Mean')
+    axs[0].set_xticklabels(layer_names, rotation=90)
+    axs[0].set_xlabel('Layer Name')
+    axs[0].set_ylabel('Mean of Weights')
+    axs[0].set_title('Mean of Weights of Linear Layers')
+    axs[0].legend()
+
+    # Plot the variances and variance of variances for activation layers
+    axs[1].plot(layer_names, variance_values, label='Variance')
+    if variance_of_variance:
+        axs[1].plot(layer_names, variance_of_variance_values, linestyle='--', label='Variance of Variance')
+    axs[1].set_xticklabels(layer_names, rotation=90)
+    axs[1].set_xlabel('Layer Name')
+    axs[1].set_ylabel('Variance of Weights')
+    axs[1].set_title('Variance of Weights of Linear Layers')
+    axs[1].legend()
+
+    # Adjust the layout and display the plot
     plt.tight_layout()
     if save_path:
         plt.savefig(save_path)
     else:
         plt.show()
+    plt.close()
 
-def plot_acc_vs_cut(finetuned_accs, cuts, ylabel="Finetuned Training Accuracy", save_path=None):
-    plt.plot(cuts, finetuned_accs)
-    plt.xlabel('Cut')
-    plt.ylabel(ylabel)
-    plt.title('{} vs Cut'.format(ylabel))
+def plot_acc_vs_cut(finetuned_accs, cuts, save_path=None):
+    names = [str(cut)+str(1) for cut in cuts]
+
+    fig, axs = plt.subplots(1, 2, figsize=(15, 5))
+    # Plot the variances and variance of variances for conv layers
+    axs[0].plot(range(1,len(cuts)+1), finetuned_accs['train'], label='Mean')
+    axs[0].set_xticklabels(names, rotation=90)
+    axs[0].set_xlabel('Cut')
+    axs[0].set_ylabel('Accuracy')
+    axs[0].set_title('Train Accuracy on Fine-tuning Set per Cut')
+    axs[0].legend()
+
+    # Plot the variances and variance of variances for activation layers
+    axs[1].plot(range(1,len(cuts)+1), finetuned_accs['test'], label='Variance')
+    axs[1].set_xticklabels(names, rotation=90)
+    axs[1].set_xlabel('Cut')
+    axs[1].set_ylabel('Accuracy')
+    axs[1].set_title('Train Accuracy on Fine-tuning Set per Cut')
+    axs[1].legend()
+
+    # Adjust the layout and display the plot
+    plt.tight_layout()
     if save_path:
         plt.savefig(save_path)
     else:
         plt.show()
+    plt.close()
 
+# HELPER FUNCTION: utils.multiple_fine_tuning_experiments
 def box_plot_multiple_exp(experiments, cuts, save_path=None):
     # Initialize lists to store all accuracies for each cut point
     train_accuracies = [[] for _ in cuts]
@@ -292,3 +341,33 @@ def box_plot_multiple_exp(experiments, cuts, save_path=None):
         plt.savefig(save_path)
     else:
         plt.show()
+    plt.close()
+
+# not sure if it works with torch Dataloader yet
+def plot_decision_boundary(model, X, y, n_classes, loader=None):
+    if loader:
+        X = loader.dataset.dataset.data.numpy()
+        y = loader.dataset.dataset.targets.numpy()
+    x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
+    y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
+    xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.1),
+                         np.arange(y_min, y_max, 0.1))
+
+    with torch.no_grad():
+        model.eval()
+        Z = model(torch.FloatTensor(np.c_[xx.ravel(), yy.ravel()])).numpy()
+        Z = np.argmax(Z, axis=1)
+
+    Z = Z.reshape(xx.shape)
+    plt.contourf(xx, yy, Z, alpha=0.8)
+    plt.scatter(X[:, 0], X[:, 1], c=y, edgecolors='k', marker='o', linewidth=1)
+    plt.title("Decision Boundary")
+    plt.xlabel("X-axis")
+    plt.ylabel("Y-axis")
+
+    for i in range(n_classes):
+        plt.scatter([], [], c='k', alpha=0.8, s=20, label=f"Class {i}")
+    plt.legend(loc='upper left')
+
+    plt.show()
+    plt.close()

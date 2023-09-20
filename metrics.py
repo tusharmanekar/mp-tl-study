@@ -54,7 +54,7 @@ class ActivationHook:
         self.activations = activations
 
     def __call__(self, module, input, output):
-        self.activations[self.name].extend(list(torch.var(output, dim=1).detach().numpy()))
+        self.activations[self.name].extend(list(torch.var(output, dim=1).to('cpu').detach().numpy()))
 
 def compute_layer_variances_dense(model, test_loader, device='cpu', cnn=True):
     activations = {}
@@ -100,6 +100,7 @@ def compute_weight_variances(model):
             weights = layer.weight.detach().cpu().numpy()
             
             # Calculate the variance of the weights for this layer
+            weight_mean = np.mean(weights)
             weight_var = np.var(weights)
             
             # Calculate the variance of the variance for this layer
@@ -107,6 +108,7 @@ def compute_weight_variances(model):
             
             # Store these statistics
             weight_stats[name] = {
+                'mean' : weight_mean,
                 'variance': weight_var,
                 'variance_of_variance': weight_var_of_var
             }

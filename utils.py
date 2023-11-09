@@ -360,14 +360,16 @@ def eval_cnn(model, device, dataset_loader, debug=False, logger=print):
 
     return acc
 
-def cut_cnn_model(model, cut_point=1, freeze=True):
+
+def cut_cnn_model(model, cut_point=1, freeze=True, reinitialize=True):
     """
-    Cut the CNN model at a specific layer and reinitialize the weights for layers after cut_point.
+    Cut the CNN model at a specific layer and reinitialize the weights for layers after cut_point if reinitialize is True.
 
     Parameters:
     - model (nn.Module): Original model.
     - cut_point (int): Layer index at which to cut the model.
     - freeze (bool): If True, layers before cut_point will have their weights frozen.
+    - reinitialize (bool): If True, layers after cut_point will have their weights reinitialized.
 
     Returns:
     - new_model (nn.Sequential): Cut and potentially modified model.
@@ -392,12 +394,12 @@ def cut_cnn_model(model, cut_point=1, freeze=True):
     # Cut layers
     new_layers = layers[:cut_point]
 
-    # Reinitialize layers after cut point
+    # Reinitialize or keep layers after cut point
     for i in range(cut_point, len(layers)):
         layer = layers[i]
         
-        # Reinitialize weights if layer has parameters (like Conv2d)
-        if hasattr(layer, 'weight'):
+        # If reinitialize is True, reset weights of the layers having parameters (like Conv2d)
+        if reinitialize and hasattr(layer, 'weight'):
             nn.init.kaiming_uniform_(layer.weight, a=0, mode='fan_in', nonlinearity='relu')
             if layer.bias is not None:
                 nn.init.constant_(layer.bias, 0)
@@ -407,6 +409,7 @@ def cut_cnn_model(model, cut_point=1, freeze=True):
 
     # Return new model
     return nn.Sequential(*new_layers)
+
 
 def cut_cnn_model_orthogonal(model, cut_point=1, freeze=True):
     """

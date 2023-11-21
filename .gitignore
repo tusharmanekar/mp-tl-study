@@ -5,9 +5,8 @@ optimal_init.ipynb
 checkpoint_epoch*.pth
 tests.ipynb
 __init__.py 
-setup.py
+setup.py 
 David/data/
 David/archive/
-David/archive
-data/MNIST/raw/
+data/
 50-50_MNIST/best_model.pth

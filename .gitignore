@@ -10,3 +10,4 @@ David/data/
 David/archive/
 data/
 50-50_MNIST/best_model.pth
+50-50_MNIST/MNIST_base*.ipynb

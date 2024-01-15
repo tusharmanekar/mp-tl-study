@@ -13,3 +13,6 @@ data/
 50-50_MNIST/MNIST_base*.ipynb
 FashionMNIST/FashionMNIST_base_*.ipynb
 FashionMNIST/Hyperparameter Search MP.ipynb
+CIFAR/FashionMNIST_cifar10_bettermodel*.ipynb
+FashionMNIST/FashionMNIST_MNIST_for_Arnisa*.ipynb
+FashionMNIST/FashionMNIST_MNIST_*.ipynb

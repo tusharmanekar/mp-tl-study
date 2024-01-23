@@ -501,14 +501,6 @@ class TransferLearningWrapper:
         return self.phase
     
 # ------------------------------------------ PLOTTING UTILS -------------------------------------------
-'''def effective_rank(singular_values):
-    sigma_max = np.max(singular_values)
-    sigma_min = singular_values[-1] if singular_values[-1] > 0 else np.min(singular_values[singular_values > 0])
-    # print(sigma_max, sigma_min)
-    print(np.sqrt(sigma_max / sigma_min))
-    print('----')
-    return np.sqrt(sigma_max / sigma_min)'''
-
 def effective_rank(singular_values):
     normalized_singular_values = singular_values / np.sum(singular_values)
     entropy = -np.sum(normalized_singular_values * np.log(normalized_singular_values))

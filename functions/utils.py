@@ -14,8 +14,6 @@ from sklearn.metrics import classification_report
 from types import SimpleNamespace
 import plotly.express as px
 import pandas as pd
-import plotly.graph_objects as go
-from scipy.interpolate import griddata
 import math
 from sklearn.preprocessing import LabelEncoder
 

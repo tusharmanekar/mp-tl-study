@@ -271,3 +271,18 @@ def plot_ARI_scores_percentages(df:pd.DataFrame, dataset:str, split:str, order=N
     fig.subplots_adjust(top=0.85)
     plt.tight_layout()
     return plt
+
+def plot_ARI_scores(ari_scores, channel_ids, layer_names, num_samples:str, dataset:str, split:str):
+    # Extract mean and std for each layer
+    mean_scores = [np.mean(list(ari_scores[layer].values())) for layer in layer_names]
+    std_scores = [np.std(list(ari_scores[layer].values())) for layer in layer_names]
+
+    # Create a box plot
+    plt.figure(figsize=(10, 6))
+    plt.boxplot([list(ari_scores[layer].values()) for layer in layer_names], showmeans=True)
+
+    plt.xticks(range(1, len(layer_names) + 1), [name+"\nmean: "+str(round(mean_scores[i]))+"\nstd: "+str(round(std_scores[i])) for i, name in enumerate(layer_names)])
+    plt.xlabel('Layer')
+    plt.ylabel('Scores (*100)')
+    plt.title(f'ARI Scores for each CNN layer, {len(channel_ids)} channels, {num_samples} samples and {dataset} {split} dataset')
+    plt.show()

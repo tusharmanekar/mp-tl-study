@@ -10,10 +10,13 @@ David/data/
 David/archive/
 data/
 MNIST/MNIST_*
+MNIST/.DS_Store
 FashionMNIST/FashionMNIST_base_*.ipynb
 FashionMNIST/Hyperparameter Search MP.ipynb
 FashionMNIST/FashionMNIST_MNIST_for_Arnisa*.ipynb
 FashionMNIST/FashionMNIST_MNIST_*.ipynb
 FashionMNIST/data/
+FashionMNIST/.DS_Store
 CIFAR/FashionMNIST_cifar10_bettermodel*.ipynb
 CIFAR/data/
+CIFAR/.DS_Store

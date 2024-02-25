@@ -9,8 +9,7 @@ setup.py
 David/data/
 David/archive/
 data/
-50-50_MNIST/best_model.pth
-50-50_MNIST/MNIST_base*.ipynb
+MNIST/MNIST_*
 FashionMNIST/FashionMNIST_base_*.ipynb
 FashionMNIST/Hyperparameter Search MP.ipynb
 FashionMNIST/FashionMNIST_MNIST_for_Arnisa*.ipynb

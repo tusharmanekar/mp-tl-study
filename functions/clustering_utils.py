@@ -40,9 +40,7 @@ class CNNFeatureExtractor(nn.Module):
         self.calculate_to_linear_size()
 
         # Add one fully connected layers for classification
-        self.fc = nn.Linear(self._to_linear, params["hidden_dim_lin"])
-        self.act = params["activation_function"]()
-        self.fc_2 = nn.Linear(params["hidden_dim_lin"], output_dim)
+        self.fc = nn.Linear(self._to_linear, output_dim)
 
     # calculate the input dimensions to the fully-connecting layer by forwarding a dummy input
     def calculate_to_linear_size(self):
@@ -77,19 +75,16 @@ class CNNFeatureExtractor(nn.Module):
                 outputs[layer_name] = x.cpu()
 
         x = x.view(-1, self._to_linear) # Flatten
-        x = self.fc_1(x)
-        outputs["fc_1"] = x.cpu()
-        x = self.act(x)
-        x = self.fc_2(x)
-        outputs["fc_2"] = x.cpu()
-        return outputs  
+        x = self.fc(x)
+        outputs["fc"] = F.log_softmax(x, dim=1).cpu()
+        return outputs
 
     def get_features_layers(self):
         names = []
         for layer_name, _ in self.named_children():
             if "conv" in layer_name or "fc" in layer_name:
                 names.append(layer_name) 
-        return names     
+        return names         
     
 def extract_features_and_labels(model, data_loader, device):
     model.eval()  # Set the model to evaluation mode

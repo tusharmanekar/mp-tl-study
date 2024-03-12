@@ -25,3 +25,5 @@ FashionMNIST/FashionMNIST_sanity_check_2.ipynb
 CIFAR/FashionMNIST_cifar10_bettermodel*.ipynb
 CIFAR/data/
 CIFAR/.DS_Store
+CIFAR/FashionMNIST_base_*
+CIFAR/CIFAR_base_*

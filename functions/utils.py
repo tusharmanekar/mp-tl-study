@@ -27,11 +27,11 @@ if torch.cuda.is_available():
 
 # ------------------------------------ MODEL UTILS ----------------------------------------------
 class CustomCNN(nn.Module):
-    def __init__(self, params, output_dim):
+    def __init__(self, params, output_dim, input_shape=(1, 28, 28)):
         super(CustomCNN, self).__init__()
         self.params = params
-        # Initial number of input channels, assuming grayscale images
-        in_channels = 1
+        self.input_shape = input_shape
+        in_channels = input_shape[0]
 
         # Dynamically add convolutional and activation layers based on the specified depth
         for i in range(params["depth"]):
@@ -41,13 +41,9 @@ class CustomCNN(nn.Module):
             # Create an activation layer (e.g., ReLU) and add it to the model
             setattr(self, f"act{i}", params["activation_function"]())
 
-            # Update the input dimensions after convolution
-            # input_dim = (input_dim - kernel_size + 2 * math.floor(kernel_size/2)) + 1
-
             # Optionally add pooling layers to reduce spatial dimensions
-            if params["use_pooling"] and (i+1) % params["depth"] == 0:
-                setattr(self, f"pool{i}", nn.AvgPool2d(2, 2))
-                # input_dim = input_dim // 2
+            if params["use_pooling"] and (i+1) % params["pooling_every_n_layers"] == 0:
+                setattr(self, f"pool{i}", nn.AvgPool2d(2, stride=params['pooling_stride']))
 
             # Update the input channels for the next convolutional layer
             in_channels = params["num_channels"]
@@ -61,7 +57,7 @@ class CustomCNN(nn.Module):
 
     # calculate the input dimensions to the fully-connecting layer by forwarding a dummy input
     def calculate_to_linear_size(self):
-        x = torch.zeros(1, 1, 28, 28)
+        x = torch.zeros((1,) + self.input_shape)
         for layer_name, layer in self.named_children():
             # Process the input tensor through convolutional and activation layers
             if "conv" in layer_name or "act" in layer_name:
@@ -153,7 +149,7 @@ class Trainer:
       for batch_idx, (data, target) in enumerate(self.dataloader.train_loader):
           # Print the size of the current batch
           if self.is_cnn:
-            data = data.view(data.size(0), 1, 28, 28)
+            data = data.view(data.size(0), *self.model.input_shape)
           else:
             data = data.reshape([data.shape[0], -1])
           data, target = data.to(self.device), target.to(self.device)
@@ -258,7 +254,7 @@ def eval(model, device, dataset_loader, debug=False, classification_report_flag=
     with torch.no_grad():
         for data, target in dataset_loader:
             if is_cnn:
-              data = data.view(data.size(0), 1, 28, 28)
+              data = data.view(data.size(0), *model.input_shape)
             else:
               data = data.reshape([data.shape[0], -1])
             data, target = data.to(device), target.to(device)

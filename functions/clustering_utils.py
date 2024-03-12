@@ -1,6 +1,7 @@
 from sklearn.manifold import TSNE
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
+import torch.nn.functional as F
 from sklearn import metrics
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -11,11 +12,11 @@ import torch
 import torch.nn as nn
 
 class CNNFeatureExtractor(nn.Module):
-    def __init__(self, params, output_dim):
+    def __init__(self, params, output_dim, input_shape=(1, 28, 28)):
         super(CNNFeatureExtractor, self).__init__()
-
-        # Initial number of input channels, assuming grayscale images
-        in_channels = 1
+        self.params = params
+        self.input_shape = input_shape
+        in_channels = input_shape[0]
 
         # Dynamically add convolutional and activation layers based on the specified depth
         for i in range(params["depth"]):
@@ -25,13 +26,9 @@ class CNNFeatureExtractor(nn.Module):
             # Create an activation layer (e.g., ReLU) and add it to the model
             setattr(self, f"act{i}", params["activation_function"]())
 
-            # Update the input dimensions after convolution
-            # input_dim = (input_dim - kernel_size + 2 * math.floor(kernel_size/2)) + 1
-
             # Optionally add pooling layers to reduce spatial dimensions
-            if params["use_pooling"] and (i+1) % params["depth"] == 0:
-                setattr(self, f"pool{i}", nn.AvgPool2d(2, 2))
-                # input_dim = input_dim // 2
+            if params["use_pooling"] and (i+1) % params["pooling_every_n_layers"] == 0:
+                setattr(self, f"pool{i}", nn.AvgPool2d(2, stride=params['pooling_stride']))
 
             # Update the input channels for the next convolutional layer
             in_channels = params["num_channels"]
@@ -44,7 +41,7 @@ class CNNFeatureExtractor(nn.Module):
 
     # calculate the input dimensions to the fully-connecting layer by forwarding a dummy input
     def calculate_to_linear_size(self):
-        x = torch.zeros(1, 1, 28, 28)
+        x = torch.zeros((1,) + self.input_shape)
         for layer_name, layer in self.named_children():
             # Process the input tensor through convolutional and activation layers
             if "conv" in layer_name or "act" in layer_name:

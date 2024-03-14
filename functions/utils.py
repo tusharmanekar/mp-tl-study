@@ -39,11 +39,11 @@ class CustomCNN(nn.Module):
             setattr(self, f"conv{i}", nn.Conv2d(in_channels, params["num_channels"], kernel_size=params["kernel_size"], padding=math.floor(params["kernel_size"]/2)))
 
             # Create an activation layer (e.g., ReLU) and add it to the model
-            setattr(self, f"act{i}", params["activation_function"]())
+            setattr(self, f"act{i}", params.get("activation_function", nn.ReLU)())
 
             # Optionally add pooling layers to reduce spatial dimensions
-            if params["use_pooling"] and (i+1) % params["pooling_every_n_layers"] == 0:
-                setattr(self, f"pool{i}", nn.AvgPool2d(2, stride=params['pooling_stride']))
+            if params.get("use_pooling", None) and (i+1) % params.get("pooling_every_n_layers", 1) == 0:
+                setattr(self, f"pool{i}", nn.AvgPool2d(2, stride=params.get('pooling_stride', 2)))
 
             # Update the input channels for the next convolutional layer
             in_channels = params["num_channels"]
@@ -52,8 +52,15 @@ class CustomCNN(nn.Module):
         # flattened_size = in_channels * input_dim * input_dim
         self.calculate_to_linear_size()
 
-        # Add one fully connected layers for classification
-        self.fc = nn.Linear(self._to_linear, output_dim)
+        # 2 Linear layers (used for MNIST)
+        if params.get("two_linear_layers", None):
+            # Add one fully connected layers for classification
+            self.fc = nn.Linear(self._to_linear, params["hidden_dim_lin"])
+            self.act = params.get("activation_function", nn.ReLU)()
+            self.fc_2 = nn.Linear(params["hidden_dim_lin"], output_dim)
+        else:
+            # Add one fully connected layers for classification
+            self.fc = nn.Linear(self._to_linear, output_dim)
 
     # calculate the input dimensions to the fully-connecting layer by forwarding a dummy input
     def calculate_to_linear_size(self):
@@ -85,6 +92,9 @@ class CustomCNN(nn.Module):
 
         x = x.view(-1, self._to_linear) # Flatten
         x = self.fc(x)
+        if self.params.get("two_linear_layers", None):
+            x = self.act(x)
+            x = self.fc_2(x)
         return F.log_softmax(x, dim=1)
 
 class Trainer:
@@ -139,7 +149,7 @@ class Trainer:
         self.best_model_state = copy.deepcopy(self.model.state_dict())
         self.max_val_acc = 0.
         self.no_improve_epochs = 0
-        self.is_cnn = params.get('is_cnn', False)
+        self.is_cnn = params.get('is_cnn', True)
         self.is_debug = params.get('is_debug', False)
         self.classification_report_flag = params.get('classification_report_flag', False)
         self.logger = params.get('logger', print)
@@ -185,7 +195,7 @@ class Trainer:
             self.no_improve_epochs = 0
             # Deep copy the model's state
             self.best_model_state = copy.deepcopy(self.model.state_dict())
-            if self.params.get('save_best', False):
+            if self.params.get('save_best', None):
                 self.save_best_model()
         else:
             self.no_improve_epochs += 1
@@ -303,7 +313,7 @@ def cut_custom_cnn_model(model, cut_point, params, output_dim):
     #print(conv_indices)
 
     # If freeze is True, set requires_grad to False for layers before cut_point
-    if params["freeze"]:
+    if params.get("freeze", None):
         for idx in conv_indices[:cut_point]:
             for param in getattr(new_model, layer_names[idx]).parameters():
                 param.requires_grad = False
@@ -312,28 +322,26 @@ def cut_custom_cnn_model(model, cut_point, params, output_dim):
         layer = getattr(new_model, layer_names[idx])
 
         # Reinitialize layers after cut_point
-        if params["reinit"]:
+        if params.get("reinit", None):
             layer.reset_parameters()
-            """
-            nn.init.kaiming_uniform_(layer.weight, a=0, mode='fan_in', nonlinearity='relu')
-            if layer.bias is not None:
-                nn.init.constant_(layer.bias, 0)
-            """
 
         # Delete the layers after cut_point
-        if params["truncate"]:
+        if params.get("truncate", None):
             delattr(new_model, layer_names[idx])
             # also delete the activation after this conv layer
             delattr(new_model, layer_names[idx+1])
 
-    """# if reinit_both_dense: reinit the one before the last one too
-    if params["reinit_both_dense"]:
-        new_model.fc_1.reset_parameters()"""
-
-    # reinit the final dense layer anyway
-    # new_model.fc.reset_parameters()
     new_model.calculate_to_linear_size()
-    new_model.fc = nn.Linear(new_model._to_linear, output_dim)
+
+    if params.get("two_linear_layers", None):
+        if params.get("reinit_both_dense", True):
+            new_model.fc = nn.Linear(new_model._to_linear, params["hidden_dim_lin"])
+            new_model.act = params.get("activation_function", nn.ReLU)()
+            new_model.fc_2 = nn.Linear(params["hidden_dim_lin"], output_dim)
+        else:
+            new_model.fc_2 = nn.Linear(params["hidden_dim_lin"], output_dim)
+    else:
+        new_model.fc = nn.Linear(new_model._to_linear, output_dim)
     
     return new_model
 
@@ -447,12 +455,12 @@ class TransferLearningWrapper:
 
         pretrain_len = len(pretrain_train_data)
         finetune_len = len(finetune_train_data)
-        pretrain_val_len = int(params['val_split'] * pretrain_len)
-        finetune_val_len = int(params['val_split'] * finetune_len)
+        pretrain_val_len = int(params.get('val_split', 0.1) * pretrain_len)
+        finetune_val_len = int(params.get('val_split', 0.1) * finetune_len)
         pretrain_train_dataset, pretrain_val_dataset = torch.utils.data.random_split(
-            pretrain_train_data, [pretrain_len - pretrain_val_len, pretrain_val_len], generator=torch.Generator().manual_seed(params['generate_dataset_seed']))
+            pretrain_train_data, [pretrain_len - pretrain_val_len, pretrain_val_len], generator=torch.Generator().manual_seed(params.get('generate_dataset_seed', 42)))
         finetune_train_dataset, finetune_val_dataset = torch.utils.data.random_split(
-            finetune_train_data, [finetune_len - finetune_val_len, finetune_val_len], generator=torch.Generator().manual_seed(params['generate_dataset_seed']))
+            finetune_train_data, [finetune_len - finetune_val_len, finetune_val_len], generator=torch.Generator().manual_seed(params.get('generate_dataset_seed', 42)))
 
         pretrain_test_full = pretrain_dataset(root=root_dir, train=True, download=True, transform=transform)
         finetune_test_full = finetune_dataset(root=root_dir, train=True, download=True, transform=transform)

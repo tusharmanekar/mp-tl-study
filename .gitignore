@@ -27,3 +27,8 @@ CIFAR/data/
 CIFAR/.DS_Store
 CIFAR/FashionMNIST_base_*
 CIFAR/CIFAR_base_*
+
+FashionMNIST_to_MNIST/experiments*
+FashionMNIST_to_MNIST/fashion_model.pth
+
+MNIST_to_FashionMNIST/experiments*

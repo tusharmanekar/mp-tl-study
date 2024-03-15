@@ -9,6 +9,7 @@ setup.py
 David/data/
 David/archive/
 data/
+.DS_Store
 
 MNIST/MNIST_*
 MNIST/.DS_Store

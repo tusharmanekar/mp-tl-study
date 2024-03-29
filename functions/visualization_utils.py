@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import patheffects
 import pandas as pd
@@ -16,22 +17,55 @@ def calculate_statistics(df:pd.DataFrame):
     df['Max Train Accuracy'] = df.groupby(['learning rate', 'Percentage', 'Cut Point'])['Train Accuracy'].transform('max')
     return df
 
-
-def box_plot_percentages_experiments(df:pd.DataFrame, params:dict, ylim:float=None, yscale:str=None, figsize:tuple=(10,20)):
+def box_plot_percentages_experiments(df:pd.DataFrame, rank_df:pd.DataFrame, color_ranks:bool, params:dict, ylim:float=None, yscale:str=None, figsize:tuple=None):
     # Creating subplots for each data percentage
     unique_percentages = df['Percentage'].unique()
-    #unique_percentages = [0.001, 0.002, 0.005, 0.01, 0.05, 0.1]
     n_percentages = len(unique_percentages)
 
-    # Adjusting the subplot layout for better readability of median values (improving contrast)
+    if figsize is None:
+        figsize = (10, 2 * n_percentages)
+
+    # Adjusting the subplot layout for better readability of median values
     fig, axes = plt.subplots(nrows=n_percentages, ncols=1, figsize=figsize, sharex=True)
 
     for i, percentage in enumerate(sorted(unique_percentages)):
         # Filtering data for each percentage
         df_subset = df[df['Percentage'] == percentage]
-        
-        # Creating a boxplot for the current percentage
-        sns.boxplot(x='Cut Point', y='Test Accuracy', data=df_subset, ax=axes[i])
+
+        if color_ranks:
+            # Custom coloring based on ranks sorted by median accuracy
+            rank_subset = rank_df[rank_df['Percentage'] == percentage]
+            ranks = rank_subset.set_index('Cut Point')['rank']
+            ranks.loc[-1] = ranks.loc[0]   
+            ranks_sorted = ranks.sort_values(ascending=False)
+
+            new_ranks = ranks_sorted.copy()
+            current_rank = ranks_sorted.iloc[-1]
+            prev = current_rank
+            for k in range(len(ranks_sorted)-2, -1, -1):
+                if ranks_sorted.iloc[k] != prev:
+                    prev = ranks_sorted.iloc[k]
+                    current_rank += 1
+                new_ranks.iloc[k] = current_rank
+
+            rank_color_map = {rank: color_id for color_id, rank in enumerate(new_ranks)}
+            cut_color_map = {cut: rank_color_map[rank] for cut, rank in new_ranks.items()}
+            cut_rank_map = {cut: rank for cut, rank in new_ranks.items()}
+            color_palette = sns.color_palette('viridis', len(cut_color_map))
+            palette = {cut: color_palette[color_id] for cut, color_id in cut_color_map.items()}
+
+            sns.boxplot(x='Cut Point', y='Test Accuracy', data=df_subset, ax=axes[i], palette=palette)
+        else:
+            # Creating a boxplot for the current percentage with default coloring
+            sns.boxplot(x='Cut Point', y='Test Accuracy', data=df_subset, ax=axes[i])
+
+        # Annotating each boxplot with the median value for better contrast
+        medians = df_subset.groupby(['Cut Point'])['Test Accuracy'].median().sort_index()
+        for j, median in enumerate(medians):
+            txt = f'{median:.3f}\nRank: {cut_rank_map[j-1]}' if color_ranks else f'{median:.3f}'
+            text = axes[i].text(j, median, txt, horizontalalignment='center', size='small', color='white', weight='semibold')
+            text.set_path_effects([patheffects.withStroke(linewidth=2, foreground="black")])
+
         axes[i].set_title(f'Sampled Percentage: {percentage}')
         axes[i].set_xlabel('Sampled Cut Point')
         if ylim:
@@ -45,17 +79,13 @@ def box_plot_percentages_experiments(df:pd.DataFrame, params:dict, ylim:float=No
             axes[i].set_xlabel('')
         axes[i].set_ylabel('Test Accuracy')
 
-        # Annotating each boxplot with the median value and adjusting for better contrast
-        medians = df_subset.groupby(['Cut Point'])['Test Accuracy'].median().sort_index()
-        for j, median in enumerate(medians):
-            text = axes[i].text(j, median, f'{median:.3f}', 
-                                horizontalalignment='center', size='small', color='white', weight='semibold')
-            text.set_path_effects([patheffects.withStroke(linewidth=2, foreground="black")])
+    # Adding a super title
     st = fig.suptitle(f'Freeze = {params["freeze"]}, Reinitialize = {params["reinit"]}, Pooling = {params["use_pooling"]}, Learning rate = {params["lr_fine_tune"]}')
-
     st.set_y(1.0)
     fig.subplots_adjust(top=0.85)
     plt.tight_layout()
+
+
     return plt
 
 def box_plot_full_experiments(df:pd.DataFrame, params:dict):
@@ -224,6 +254,88 @@ def surface_plot(df:pd.DataFrame, params:dict=None, figsize:tuple=(12, 8)):
     ax.set_ylabel('Cut Point')
     ax.set_zlabel('Mean Test Accuracy')
     return plt
+
+# ---------------------------------------------------------- STATISTICAL TESTS --------------------------------------------------------
+from scipy.stats import wilcoxon
+
+def pairwise_comparison(df:pd.DataFrame):
+    df_differences = df[df['Cut Point'] != -1]
+
+    def perform_wilcoxon_test(group, cut_point_1, cut_point_2):
+        data_1 = group[group['Cut Point'] == cut_point_1]['Test Accuracy']
+        data_2 = group[group['Cut Point'] == cut_point_2]['Test Accuracy']
+
+        # Ensure equal length by trimming or padding
+        min_len = min(len(data_1), len(data_2))
+        data_1, data_2 = data_1[:min_len], data_2[:min_len]
+
+        stat, p_value = wilcoxon(data_1, data_2)
+        return stat, p_value
+
+    # Perform pairwise comparison for each sampled_percentage
+    wilcoxon_pairwise_results = []
+
+    for percentage in df_differences['Percentage'].unique():
+        group = df_differences[df_differences['Percentage'] == percentage]
+        cut_points = group['Cut Point'].unique()
+
+        for i in range(len(cut_points)):
+            for j in range(i + 1, len(cut_points)):
+                stat, p_value = perform_wilcoxon_test(group, cut_points[i], cut_points[j])
+                wilcoxon_pairwise_results.append({
+                    'Percentage': percentage,
+                    'Cut Point 1': cut_points[i],
+                    'Cut Point 2': cut_points[j],
+                    'statistic': stat,
+                    'p_value': p_value
+                })
+
+    # Converting the results to a DataFrame
+    df_wilcoxon_pairwise = pd.DataFrame(wilcoxon_pairwise_results)
+
+    # Assuming df_wilcoxon_pairwise and df_differences are defined as before
+
+    # Step 1: Aggregate Test Accuracy and Initialize Rankings
+    median_accuracy = df_differences.groupby(['Percentage', 'Cut Point'])['Test Accuracy'].median()
+
+    rankings = {percentage: {} for percentage in median_accuracy.index.get_level_values(0).unique()}
+    for (percentage, cut_point), accuracy in median_accuracy.items():
+        rankings[percentage][cut_point] = {'median_accuracy': accuracy, 'rank': None, 'group': set([cut_point])}
+
+    # Step 2: Group Cuts Based on Statistical Significance
+    alpha = 0.05  # Significance level
+
+    for percentage, cuts_info in rankings.items():
+        for cut1, info1 in cuts_info.items():
+            for cut2, info2 in cuts_info.items():
+                if cut1 != cut2:
+                    wilcoxon_row = df_wilcoxon_pairwise[
+                        (df_wilcoxon_pairwise['Percentage'] == percentage) & 
+                        ((df_wilcoxon_pairwise['Cut Point 1'] == cut1) & (df_wilcoxon_pairwise['Cut Point 2'] == cut2) |
+                        (df_wilcoxon_pairwise['Cut Point 1'] == cut2) & (df_wilcoxon_pairwise['Cut Point 2'] == cut1))
+                    ]
+                    if not wilcoxon_row.empty and wilcoxon_row.iloc[0]['p_value'] > alpha:
+                        # Merge groups if not significantly different
+                        info1['group'].update(info2['group'])
+                        for cut in info2['group']:
+                            info1['group'].update(rankings[percentage][cut]['group'])
+                        for cut in info1['group']:
+                            rankings[percentage][cut]['group'] = info1['group']
+
+    # Step 3: Assign Ranks with Ties
+    for percentage, cuts_info in rankings.items():
+        sorted_groups = sorted({frozenset(info['group']) for cut, info in cuts_info.items()}, key=lambda x: min(median_accuracy[percentage, cut] for cut in x), reverse=True)
+        rank = 1
+        for group in sorted_groups:
+            for cut in group:
+                rankings[percentage][cut]['rank'] = rank
+            rank += len(group)
+
+    # Convert rankings and median accuracies to a DataFrame for easier visualization
+    df_rankings = pd.DataFrame([(percentage, cut, data['rank'], data['median_accuracy']) for percentage, cuts_info in rankings.items() for cut, data in cuts_info.items()],
+                            columns=['Percentage', 'Cut Point', 'rank', 'median_accuracy'])
+
+    return df_rankings
 
 # ---------------------------------------------------------- KP METRICS --------------------------------------------------------
 # dataset: "Finetune" or "Pretrain"

@@ -42,9 +42,9 @@ Baselines vs. cuts
 
 ## Empirical Experiments
 
-box plot, explain the plot \
+box plot, explain the plot
 
-![cifar_regular_classes](/images/cifar_regular_classes.png)
+![cifar_regular_classes](/images/cifar_regular_classes.jpeg)
 
 some other visualizations.
 

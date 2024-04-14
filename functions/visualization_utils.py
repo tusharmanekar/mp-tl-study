@@ -89,7 +89,7 @@ def box_plot_percentages_experiments(df:pd.DataFrame, rank_df:pd.DataFrame, colo
 
     # Adding legend
     if pairwise:
-        handles = [mpatches.Patch(color=color_palette[0], label='Significant'), mpatches.Patch(color=color_palette[len(color_palette)-1], label='Not Significant')]
+        handles = [mpatches.Patch(color=color_palette[0], label='Significantly Higher'), mpatches.Patch(color=color_palette[len(color_palette)//2], label='Not Significant'), mpatches.Patch(color=color_palette[len(color_palette)-1], label='Significantly Lower')]
         fig.legend(handles=handles, loc='upper right')
 
     # Adding a super title
@@ -369,7 +369,7 @@ def pairwise_comparison_multiple_plots(df1:pd.DataFrame, df2:pd.DataFrame):
 
         for cut in cut_points:
             stat, p_value = perform_pairwise_wilcoxon_test(df1_perc[df1_perc['Cut Point'] == cut]['Test Accuracy'],
-                                                        df2[df2['Cut Point'] == cut]['Test Accuracy'])
+                                                        df2_perc[df2_perc['Cut Point'] == cut]['Test Accuracy'])
             wilcoxon_pairwise_results.append({
                 'Percentage': percentage,
                 'Cut Point': cut,

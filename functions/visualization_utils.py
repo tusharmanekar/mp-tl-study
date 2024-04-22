@@ -18,15 +18,17 @@ def calculate_statistics(df:pd.DataFrame):
     df['Max Train Accuracy'] = df.groupby(['learning rate', 'Percentage', 'Cut Point'])['Train Accuracy'].transform('max')
     return df
 
-def box_plot_percentages_experiments(df:pd.DataFrame, rank_df:pd.DataFrame, color_ranks:bool, params:dict, color_palette:str="viridis", pairwise:bool=False, ylim:float=None, yscale:str=None, figsize:tuple=None, add_baseline:bool=True):
+def box_plot_percentages_experiments(df:pd.DataFrame, rank_df:pd.DataFrame, params:dict, color_ranks:bool, unique_ranks:list=None, color_palette:str="viridis", pairwise:bool=False, ylim:float=None, yscale:str=None, figsize:tuple=None, add_baseline:bool=True):
     # Creating subplots for each data percentage
     unique_percentages = df['Percentage'].unique()
     n_percentages = len(unique_percentages)
 
     if color_ranks:
-        unique_ranks = rank_df['rank'].unique()
+        if unique_ranks is None:
+            unique_ranks = rank_df['rank'].unique()
         ranks_lim = unique_ranks.max()
         rank_color_map = {rank: ranks_lim+1-rank for rank in range(ranks_lim, 0, -1)}
+        # print(rank_color_map)
 
     if figsize is None:
         figsize = (10, 2 * n_percentages)
@@ -304,6 +306,7 @@ def pairwise_comparison(df:pd.DataFrame):
 
     # Converting the results to a DataFrame
     df_wilcoxon_pairwise = pd.DataFrame(wilcoxon_pairwise_results)
+    df_wilcoxon_pairwise["is_significant"] = df_wilcoxon_pairwise["p_value"] < 0.05
 
     # Assuming df_wilcoxon_pairwise and df_differences are defined as before
 
@@ -333,6 +336,7 @@ def pairwise_comparison(df:pd.DataFrame):
                             info1['group'].update(rankings[percentage][cut]['group'])
                         for cut in info1['group']:
                             rankings[percentage][cut]['group'] = info1['group']
+                    
 
     # Step 3: Assign Ranks with Ties
     for percentage, cuts_info in rankings.items():
@@ -346,10 +350,12 @@ def pairwise_comparison(df:pd.DataFrame):
     # Convert rankings and median accuracies to a DataFrame for easier visualization
     df_rankings = pd.DataFrame([(percentage, cut, data['rank'], data['median_accuracy']) for percentage, cuts_info in rankings.items() for cut, data in cuts_info.items()],
                             columns=['Percentage', 'Cut Point', 'rank', 'median_accuracy'])
+    
+    return df_wilcoxon_pairwise, df_rankings
 
-    return df_rankings
-
-def perform_pairwise_wilcoxon_test(data_1, data_2):
+def perform_pairwise_wilcoxon_test(data_1, data_2, default=5):
+    if np.allclose(data_1, data_2):
+        return 0, 1
     # Ensure equal length by trimming or padding
     min_len = min(len(data_1), len(data_2))
     data_1, data_2 = data_1[:min_len], data_2[:min_len]

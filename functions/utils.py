@@ -310,7 +310,7 @@ def cut_custom_cnn_model(model, cut_point, params, output_dim):
 
     # Find indices of Conv layers
     conv_indices = [i for i, name in enumerate(layer_names) if 'conv' in name]
-    #print(conv_indices)
+    fc_indices = [i for i, name in enumerate(layer_names) if 'fc' in name]
 
     # If freeze is True, set requires_grad to False for layers before cut_point
     if params.get("freeze", None):
@@ -318,18 +318,17 @@ def cut_custom_cnn_model(model, cut_point, params, output_dim):
             for param in getattr(new_model, layer_names[idx]).parameters():
                 param.requires_grad = False
 
-    for idx in conv_indices[cut_point:]:
-        layer = getattr(new_model, layer_names[idx])
-
-        # Reinitialize layers after cut_point
-        if params.get("reinit", None):
-            layer.reset_parameters()
-
-        # Delete the layers after cut_point
-        if params.get("truncate", None):
+    # Delete the layers after cut_point
+    if params.get("truncate", None):
+        # delete starting from the conv[cut_point] to the first fc
+        for idx in range(conv_indices[cut_point], fc_indices[0]):
             delattr(new_model, layer_names[idx])
-            # also delete the activation after this conv layer
-            delattr(new_model, layer_names[idx+1])
+    # Reinitialize layers after cut_point
+    else:
+        for idx in conv_indices[cut_point:]:
+            layer = getattr(new_model, layer_names[idx])
+            if params.get("reinit", None):
+                layer.reset_parameters()
 
     new_model.calculate_to_linear_size()
 

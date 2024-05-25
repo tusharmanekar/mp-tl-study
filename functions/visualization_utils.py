@@ -511,6 +511,133 @@ def pairwise_comparison_multiple_plots(df1:pd.DataFrame, df2:pd.DataFrame):
 
     return df_wilcoxon_pairwise
 
+# -------------------------------------------------------- EXPERIMENTAL ---------------------------------
+def pairwise_comparison_experimental(df:pd.DataFrame, col:str="Test Accuracy"):
+    df_differences = df
+
+    def perform_wilcoxon_test(group, cut_point_1, cut_point_2):
+        # print(cut_point_1, cut_point_2)
+        data_1 = group[group['Cut Point'] == cut_point_1][col]
+        data_2 = group[group['Cut Point'] == cut_point_2][col]
+
+        # Ensure equal length by trimming or padding
+        min_len = min(len(data_1), len(data_2))
+        data_1, data_2 = data_1[:min_len], data_2[:min_len]
+        try:
+            stat, p_value = wilcoxon(data_1, data_2)
+        except ValueError:
+            stat, p_value = 0, 1
+        # print(stat, p_value)
+        return stat, p_value
+
+    # Perform pairwise comparison for each sampled_percentage
+    wilcoxon_pairwise_results = []
+
+    for percentage in df_differences['Percentage'].unique():
+        # print(percentage)
+        group = df_differences[df_differences['Percentage'] == percentage]
+        cut_points = group['Cut Point'].unique()
+
+        for i in range(len(cut_points)):
+            for j in range(i + 1, len(cut_points)):
+                stat, p_value = perform_wilcoxon_test(group, cut_points[i], cut_points[j])
+                wilcoxon_pairwise_results.append({
+                    'Percentage': percentage,
+                    'Cut Point 1': cut_points[i],
+                    'Cut Point 2': cut_points[j],
+                    'statistic': stat,
+                    'p_value': p_value
+                })
+
+    # Converting the results to a DataFrame
+    df_wilcoxon_pairwise = pd.DataFrame(wilcoxon_pairwise_results)
+    # print(df_wilcoxon_pairwise)
+    df_wilcoxon_pairwise["is_significant"] = df_wilcoxon_pairwise["p_value"] < 0.05
+    
+    return df_wilcoxon_pairwise
+
+def find_in_nested_list(nested_list, key):
+    for i, sublist in enumerate(nested_list):
+        if key in sublist:
+            return i
+    return None
+
+def group_cuts(df_wilcoxon_pairwise, cut_points):
+    # create a list groups of tuples, containing the cut_points
+    groups = result = [[cp] for cp in cut_points]
+    skip = 1
+
+    while skip < len(groups):
+        cur = 0
+        groups = result
+        result = [groups[0]]
+        
+        cur = 0
+        while cur+skip < len(groups):
+            # print(cur, skip, groups)
+            groups = sorted(groups, key=lambda x: x[0])
+            group1 = groups[cur]
+            group2 = groups[cur+skip]
+            cur_res = find_in_nested_list(result, group1[0])
+            if cur_res == None:
+                result.append(group1)
+                cur_res = -1
+                
+            if df_wilcoxon_pairwise[
+                    (df_wilcoxon_pairwise['Cut Point 1'] == group1[0]) &
+                    (df_wilcoxon_pairwise['Cut Point 2'] == group2[0]) &
+                    (df_wilcoxon_pairwise['is_significant'] == False)].__len__() > 0: 
+                # If the current number is similar to the previous, add it to the current group
+                result[cur_res] += group2
+            else:
+                result.append(group2)
+            cur += 1
+            # print(result)
+        skip += 1
+
+        # make sure result includes all numbers
+        for i in cut_points:
+            try:
+                if find_in_nested_list(result, i) == None:
+                    list_id = find_in_nested_list(groups, i)
+                    result.append(groups[list_id])
+            except:
+                print(result, groups, i)
+    return result
+
+def get_rankings(df: pd.DataFrame):
+    # run statistical tests below to get the df_rankings
+    df_wilcoxon_pairwise_all = pairwise_comparison_experimental(df=df)
+
+    stats_all = df.groupby(['Percentage', 'Cut Point']).agg({
+        'Test Accuracy': 'mean',  # Add more columns/statistics as needed
+    })
+    stats_all = stats_all.reset_index()
+    # create empty col for stats_all called rank
+    stats_all['rank'] = None
+
+    for percentage in df['Percentage'].unique():
+        # setup
+        df_wilcoxon_pairwise = df_wilcoxon_pairwise_all[df_wilcoxon_pairwise_all["Percentage"] == percentage]
+        # print(df_wilcoxon_pairwise[["Cut Point 1", "Cut Point 2", "is_significant"]])
+        stats = stats_all[stats_all["Percentage"] == percentage]
+        cut_points = stats['Cut Point'].tolist()
+
+        # print(percentage)
+        groups = group_cuts(df_wilcoxon_pairwise, cut_points)
+        
+        # # Step 3: Rank the groups based on their mean test accuracy
+        group_mean_accuracies = [(group, stats[stats['Cut Point'].isin(group)]['Test Accuracy'].mean()) for group in groups]
+        group_mean_accuracies.sort(key=lambda x: x[1], reverse=True)
+        group_ranks = {frozenset(group): rank + 1 for rank, (group, _) in enumerate(group_mean_accuracies)}
+
+        # stats_all["rank"] = rank of the group where stats_all["Cut Point"] in group and stats_all["Percentage"] == percentage
+        for group, rank in group_ranks.items():
+            stats_all.loc[
+                (stats_all['Cut Point'].isin(group)) &
+                (stats_all['Percentage'] == percentage), "rank"] = rank
+    return df_wilcoxon_pairwise_all, stats_all
+
 # ---------------------------------------------------------- KP METRICS --------------------------------------------------------
 # dataset: "Finetune" or "Pretrain"
 # split: "Train" or "Val" or "Test"

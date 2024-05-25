@@ -319,7 +319,7 @@ def cut_custom_cnn_model(model, cut_point, params, output_dim):
                 param.requires_grad = False
 
     # Delete the layers after cut_point
-    if params.get("truncate", None):
+    if params.get("truncate", None) and cut_point < len(conv_indices):
         # delete starting from the conv[cut_point] to the first fc
         for idx in range(conv_indices[cut_point], fc_indices[0]):
             delattr(new_model, layer_names[idx])

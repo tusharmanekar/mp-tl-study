@@ -1,5 +1,5 @@
 from sklearn.manifold import TSNE
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, AgglomerativeClustering
 from sklearn.decomposition import PCA
 import torch.nn.functional as F
 from sklearn import metrics
@@ -56,7 +56,7 @@ class CNNFeatureExtractor(nn.Module):
 
     def forward(self, x):
         outputs = {}
-        outputs["input"] = x.cpu()
+        # outputs["input"] = x.cpu()
         # Iterate over each module in the CustomCNN class
         for layer_name, layer in self.named_children():
             # Process the input tensor through convolutional and activation layers
@@ -73,13 +73,13 @@ class CNNFeatureExtractor(nn.Module):
 
         x = x.view(-1, self._to_linear) # Flatten
         x = self.fc(x)
-        outputs["fc"] = F.log_softmax(x, dim=1).cpu()
+        # outputs["fc"] = F.log_softmax(x, dim=1).cpu()
         return outputs
 
     def get_features_layers(self):
         names = []
         for layer_name, _ in self.named_children():
-            if "conv" in layer_name or "fc" in layer_name:
+            if "conv" in layer_name:
                 names.append(layer_name) 
         return names         
     
@@ -105,6 +105,39 @@ def extract_features_and_labels(model, data_loader, device):
     # Concatenate the features from all batches
     for layer in features_from_layers:
         features_from_layers[layer] = torch.cat(features_from_layers[layer], 0)
+
+    return features_from_layers, torch.Tensor(labels_list)
+
+def extract_features_and_labels_gap(model, data_loader, device):
+    model.eval()  # Set the model to evaluation mode
+    features_from_layers = {layer: [] for layer in model.get_features_layers()}
+    labels_list = []
+
+    with torch.no_grad():
+        for images, labels in data_loader:
+            labels_list.extend(labels.numpy())
+
+            images = images.to(device)
+
+            # Extract features
+            out_features = model(images)
+
+            # Perform global average pooling over spatial dimensions for each layer
+            for name, feature in out_features.items():
+                if name != "fc":
+                    # Determine the spatial dimensions
+                    spatial_dims = tuple(range(2, len(feature.shape)))
+                    # Perform global average pooling over spatial dimensions
+                    pooled_feature = torch.mean(feature, dim=spatial_dims)
+                    # print(pooled_feature.shape)
+                    features_from_layers[name].append(pooled_feature)
+                    # print(name, pooled_feature.shape)
+    
+    # Stack the features from all batches
+    for layer in features_from_layers:
+        if layer != "fc":
+            # print(features_from_layers[layer])
+            features_from_layers[layer] = torch.cat(features_from_layers[layer], dim=0)
 
     return features_from_layers, torch.Tensor(labels_list)
 
@@ -171,3 +204,78 @@ def get_ARI_scores(model, dataloader, num_samples, channel_ids, device, apply_pc
         results[layer_name] = results_channels
     return results
 
+def calculate_pairwise_positioning_recall(labels, cluster_labels):
+    n = len(labels)
+    labels = np.array(labels)
+    cluster_labels = np.array(cluster_labels)
+    
+    true_pairs = np.sum((labels[:, None] == labels) & (np.arange(n)[:, None] != np.arange(n)))
+    correct_pairs = np.sum((labels[:, None] == labels) & (cluster_labels[:, None] == cluster_labels) & (np.arange(n)[:, None] != np.arange(n)))
+
+    if true_pairs == 0:
+        return 0
+    
+    return correct_pairs / true_pairs
+
+def remove_zero_vectors(features, labels):
+    non_zero_mask = np.linalg.norm(features, axis=1) != 0
+    # print(non_zero_mask.shape, features.shape, labels.shape)
+    return features[non_zero_mask], labels[non_zero_mask]
+
+def calculate_ppr_score(train_features, train_labels, test_features, test_labels, apply_tsne=None):
+    # Reshape features to 2D array
+    train_features_2d = train_features.view(train_features.size(0), -1).numpy()
+    test_features_2d = test_features.view(test_features.size(0), -1).numpy()
+    # Remove zero vectors from train and test features
+    train_features_2d, train_labels = remove_zero_vectors(train_features_2d, train_labels)
+    test_features_2d, test_labels = remove_zero_vectors(test_features_2d, test_labels)
+
+    if apply_tsne:
+        tsne = TSNE(n_components=apply_tsne, random_state=42)
+        train_features_2d = tsne.fit_transform(train_features_2d)
+        test_features_2d = tsne.fit_transform(test_features_2d)
+
+    # Agglomerative Clustering with cosine distance on test features
+    clustering = AgglomerativeClustering(n_clusters=np.unique(train_labels).shape[0], affinity='cosine', linkage='average')
+    cluster_labels = clustering.fit_predict(test_features_2d)
+
+    # Calculate pairwise positioning recall
+    ppr = calculate_pairwise_positioning_recall(test_labels, cluster_labels)
+    return ppr
+
+def get_PPR_scores(model, dataloader_train, dataloader_test, num_samples, device, apply_tsne=None):
+    # Extract features and labels using the feature extractor model and the test_loader
+    extracted_features_train, train_labels = extract_features_and_labels_gap(model, dataloader_train, device)
+    extracted_features_test, test_labels = extract_features_and_labels_gap(model, dataloader_test, device)
+    # print(extracted_features_train["conv0"].shape, train_labels.shape)
+    dim_size = train_labels.size(0)
+
+    if num_samples > 0:
+        random_indices = torch.randperm(dim_size)[:num_samples]
+        sampled_labels_train = torch.index_select(train_labels, 0, random_indices)
+        random_indices = torch.randperm(dim_size)[:num_samples]
+        sampled_labels_test = torch.index_select(train_labels, 0, random_indices)
+    else:
+        sampled_labels_train = train_labels
+        sampled_labels_test = test_labels
+
+    layer_names = extracted_features_train.keys()
+    # print(layer_names)
+    results = {}
+
+    for layer_name in layer_names:
+        if  layer_name != "fc":
+            if num_samples > 0:
+                random_indices = torch.randperm(num_samples)[:num_samples]
+
+                sampled_features_train = extracted_features_train[layer_name][random_indices]
+                sampled_features_test = extracted_features_test[layer_name][random_indices]
+            else:
+                # If num_samples is 0, use all features without sampling
+                sampled_features_train = extracted_features_train[layer_name]
+                sampled_features_test = extracted_features_test[layer_name]
+            ppr = calculate_ppr_score(sampled_features_train, sampled_labels_train, 
+                                        sampled_features_test, sampled_labels_test, 
+                                        apply_tsne=apply_tsne)*100
+            results[layer_name] = ppr
+    return results

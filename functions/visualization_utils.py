@@ -511,7 +511,7 @@ def pairwise_comparison_multiple_plots(df1:pd.DataFrame, df2:pd.DataFrame):
 
     return df_wilcoxon_pairwise
 
-# -------------------------------------------------------- EXPERIMENTAL ---------------------------------
+# -------------------------------------------------------- EXPERIMENTAL --------------------------------------------
 def pairwise_comparison_experimental(df:pd.DataFrame, col:str="Test Accuracy"):
     df_differences = df
 

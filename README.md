@@ -1,8 +1,15 @@
-# mp-tl-study
+# Exploring Layer Freezing in Transfer Learning
 
-"Transfer Learning Study" Masters Project repository of team- Arnisa, David and Tushar. See our report (link) for the details of experiment setup and the results.
+Masters Project repository of team- Arnisa, David and Tushar. See our report (link) for the details of experiment setup and the results.
 
-The supervisors
+## Project Supervision
+
+**Project Supervisor:**  
+- Prof. Dr. Manuel Günther  
+
+**Co-Supervisors:**  
+- Prof. Dr. Benjamin Grewe  
+- Pau Vilimelis Aceituno  
 
 ## Introduction
 
@@ -34,56 +41,97 @@ MNIST                      |  FashionMNIST            |  CIFAR-10
 :-------------------------:|:------------------------:|:-------------------------:
 ![mnist_dataset](/images/mnist_dataset.png) | ![Fashion_dataset](/images/Fashion_dataset.png) | ![cifar_dataset](/images/cifar_dataset.png)
 
-## Experimental Details {#exp-details}
+## The Experiments
 
-Reinit, freeze etc
+The experiments uses a pre-trained model to fine-tune multiple models on the target data, per 
+1. different target data percentages: [0.1%, 1%, 10%, 50%, 100%]
+2. different cut points: it freezes the layers until the cut point, and re-initializes/truncates the rest
 
-Baselines vs. cuts
+| Cuts               | CNN layer 1                | CNN layer 2                | CNN layer 3                | Final dense layer             |
+|--------------------|----------------------------|----------------------------|----------------------------|--------------------------------|
+| cut=-1 (baseline) | reinitialized, trainable  | reinitialized, trainable  | reinitialized, trainable  | reinitialized, trainable     |
+| cut=0              | reinitialized, trainable  | reinitialized, trainable  | reinitialized, trainable  | reinitialized, trainable     |
+| cut=1              | frozen                     | reinitialized, trainable  | reinitialized, trainable  | reinitialized, trainable     |
+| cut=2              | frozen                     | frozen                     | reinitialized, trainable  | reinitialized, trainable     |
+| cut=3              | frozen                     | frozen                     | frozen                     | reinitialized, trainable     |
 
-## Empirical Experiments
+We use a very specific terminology to name the experiments, pre-trained models and results files. Here is some terminology to understand all the file and folder names:
 
-box plot, explain the plot
+| Experiment Setting                                     | Layers before the cut               | Layers after the cut               | Final dense layer(s)           | Short name |
+|--------------------------------------------------------|-------------------------------------|------------------------------------|--------------------------------|------------|
+| *freeze=True* and *reinit=True*                        | not reinitialized, not trainable  | reinitialized, trainable         | replaced and reinitialized    | *FR*       |
+| *freeze=True* and *reinit=False*                       | not reinitialized, not trainable  | not reinitialized, trainable      | replaced and reinitialized    | *F*        |
+| *freeze=False* and *reinit=True*                       | not reinitialized, trainable      | reinitialized, trainable         | replaced and reinitialized    | *R*        |
+| *freeze=False* and *reinit=False*                      | not reinitialized, trainable      | not reinitialized, trainable      | replaced and reinitialized    | --         |
+| *freeze=True* and *truncate=True*                      | not reinitialized, not trainable  | removed                            | replaced and reinitialized    | *FT*       |
 
-![cifar_regular_classes](/images/cifar_regular_classes.jpeg)
+For example, *FashionMNIST regular classes FR* setting stands for: 
+1. regular classes: We pre-train on a specific subset of the FashionMNIST (all the classes other than footwear or bag), and fine-tune on a specific subset (footwear-related classes or bag)
+2. FR: we freeze the layers before the cut and re-initialize the ones after the cut. We always replace the final fully-connected layer to match the output shape of the target dataset
 
-some other visualizations.
+And then, we also have the clustering experiments, where we use the feature maps from each convolutional layer to train some clustering algorithms! We call them *MNIST regular classes cluster*: Training cluster experiments on the regular splits of MNIST.
 
-!! See example_visualizations.ipynb for a preview of all possible visualizations.
+### How to control the parameters:
+This is the model architecture, but modify it in the params dictionary:
 
-## Clustering Experiments
+![architecture](/images/architecture.png)
 
-In this experiment we extract hidden representations for the fine-tuning dataset samples from the pretrained model, and we use the hidden representations for training a clustering algorithm (K-means) and calculating the performance of the clustering (using ARI score).
+Below are the default parameters, change them in the notebooks!
 
-Steps of the method:
+    params = {
+      # MODEL ARCHITECTURE PARAMS
+      'depth': 6,
+      'num_channels': 64, # num channels for CNN
+      'activation_function': nn.ReLU,
+      'kernel_size': 3,
+      'use_pooling': True,  
+      'pooling_every_n_layers': 2, # add pooling after every n layers specified here. For only one pooling after all the CNN layers, this equals params['depth']
+      'pooling_stride': 2,
 
-1. We start with a pretrained model
-2. Feed in a subset of the fine-tuning dataset into the pretrained model
-3. Extract the hidden activations after each convolutional layer (note that we have multiple channels per each layer), in addition to inputs (the flattened input images themselves), and the output of the final dense layer.
-4. Train K-means clustering algorithms for clustering the fine-tuning samples, for each channel of each layer, and for each percentage of data (similar to our default empirical experiment). 
-5. For each of the clustering, measure the performance of quality of the clusters  using Adjusted Rand Index (ARI) metric.
-6. We repeat above steps many times (20 times for less data and 5 for more data, same as the default empirical experiment) and report the ARI scores in box plots.
+      # TRAINING PARAMS
+      'device': device,
+      'lr_pretrain': 0.001,   
+      'lr_fine_tune': 0.001,
+      'num_train': 40,
+      'early_stop_patience': 6,
+      'batch_size':64,
 
-image for the clustering visualization
+      # DATASET PARAMS: Set the pre-training and fine-tuning classes
+      'pre_train_classes': [0, 1, 2, 3, 4],
+      'fine_tune_classes': [5, 6, 7, 8, 9],
+      
+      # EXPERIMENT SETTING PARAMS
+      'freeze': True,         # Freeze the layers before the cut!
+      'reinit': True,         # Re-initialize the layers after the cut!
+      'truncate': False,      # Remove the layers after the cut (except the fully-connected layer)
+    }
 
-Evaluated on Pretrain Data |  Evaluted on Fine-tune Data
-:-------------------------:|:------------------------:
-![mnist_clustering_conv2_pretrain_test_data](/images/mnist_clustering_conv2_pretrain_test_data.png) | ![mnist_clustering_conv2_finetune_test_data](/images/mnist_clustering_conv2_finetune_test_data.png)
+Also see how we define the source and target datasets:
 
-We also repeat the clustering experiments multiple times (on multiple subsets of the pretrain/fine-tuning data) and report the results in a box-plot format similar to the empirical experiments, so that it is easier to compare the two. Here is an example results of a clustering experiment:
+```python
+    root_dir = './data' 
+    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+    dataloader_wrapped = TransferLearningWrapper(params, "datasets.MNIST", "datasets.CIFAR", root_dir, transform=transform)
+```
 
-![fashion_clustering](/images/fashion_clustering.png)
+## Results
+
+For example, when we compare the FR and F experiments, these settings do not really affect the pre-trained model and baselines, so we re-use both.
+
+FashionMNIST regular classes FR                      |  FashionMNIST regular classes F
+:---------------------------------------------------:|:-----------------------------------------:
+![fashion-regular-fr](/images/fashion-regular-fr.png) | ![fashion-regular-f](/images/fashion-regular-f.png)
+
 
 ## Output file structure
 
-The outputs of the empirical experiments represent the performance metrics of model trained in different settings, and they are saved in json files. Note that we save the results of the baseline experiments (end-to-end models trained on subsets of fine-tuning dataset) and the regular fine-tuning experiments are saved in separate json files, whose names start with _baselines_ and _results_ respectively. See our see the [experimental details](#exp-details) for more details into the experiment setting. \
+The outputs of the empirical experiments include the performance metrics (train, test accuracies on the target dataset) of model trained in different settings, and they are saved in json files. Note that we save the results of the baseline experiments (end-to-end models trained on subsets of fine-tuning dataset) and the regular fine-tuning experiments are saved in separate json files, whose names start with _baselines_ and _cuts_ respectively. We save the clustering experiment results in _regular\_cluster_.
 
 The json files contain a list of dictionaries, where the first dictionary is a copy of the params dictionary: 
 
 ```
-{"depth": 3, "num_channels": 10, "hidden_dim_lin": 128, "activation_function": "<class 'torch.nn.modules.activation.ReLU'>", "kernel_size": 5, "lr_pretrain": 0.001, "lr_fine_tune": 0.001, "num_train": 40, "early_stop_patience": 6, "save_best": false, "save_checkpoints": false, "is_cnn": true, "is_debug": false, "classification_report_flag": false, "batch_size": 4096, "pre_train_classes": [0, 1, 2, 3, 4], "fine_tune_classes": [5, 6, 7, 8, 9], "val_split": 0.1, "num_workers": 0, "generate_dataset_seed": 42, "percentages": [0.001, 0.002, 0.005, 0.01, 0.05, 0.1, 0.3, 0.5, 0.8, 1], "use_pooling": false, "freeze": true, "reinit": true, "reinit_both_dense": true}
+{"depth": 6, "num_channels": 64, "activation_function": "<class 'torch.nn.modules.activation.ReLU'>", "kernel_size": 5, "lr_pretrain": 0.001, "lr_fine_tune": 0.001, "num_train": 40, "early_stop_patience": 6, "save_best": false, "save_checkpoints": false, "is_cnn": true, "is_debug": false, "classification_report_flag": false, "batch_size": 4096, "pre_train_classes": [0, 1, 2, 3, 4], "fine_tune_classes": [5, 6, 7, 8, 9], "val_split": 0.1, "num_workers": 0, "generate_dataset_seed": 42, "percentages": [0.001, 0.002, 0.005, 0.01, 0.05, 0.1, 0.3, 0.5, 0.8, 1], "use_pooling": false, "freeze": true, "reinit": true, "reinit_both_dense": true}
 ```
-
-See the [Experiment Hyperparameters](#hyperparameters) section for more details about all possible hyperparameters. \
 
 The rest of the elements are the results for each single experiment, specifying the specific experiment parameters and the performance metrics of the trained model on the fine-tune datasets. Here is an example output: 
 
@@ -101,39 +149,37 @@ More detailed explanation of the keys:
 - `test_acc`: Accuracy of the fine-tuned or the baseline model on the test set of the fine-tune dataset.
 
 
-## Overview directories
+## Directories overview
 
 ```
 mp-tl-study
-    ├── functions
+    ├── functions                               # the code-base
     |       ├── utils.py 
     |       ├── visualization_utils.py
     |       └── clustering_utils.py
     ├── MNIST
     |       ├── data (where the chosen dataset is downloaded)
     |       ├── pretrained_models
-    |       |           └── example_pretrained_model
-    |       |                   ├── params.json
-    |       |                   └── pretrained_model.pth
+    |       |           └── regular_classes.pth
     |       ├── results
-    |       |           ├── baselines_freeze_True_pool_False.json (example baseline results)
-    |       |           ├── results_freeze_True_pool_False.json (example fine-tuning results with various cuts)
-    |       |           └── ari_scores (this folder contains the results of the clustering experiments in json format)
-    |       ├── empirical_experiment.ipynb
-    |       ├── truncation_experiment.ipynb
-    |       ├── clustering_experiment.ipynb
+    |       |           ├── baselines_regular_classes.json
+    |       |           └── cuts_regular_classes_FR.json
+    |       ├── MNIST_regular_classes_FR.ipynb
     |       └── visualizations.ipynb
     |
     ├── FashionMNIST 
     |       ├── data
     |       ├── pretrained_models
+    |       |           ├── random_classes.pth    # pre-trained on some other split of classes
+    |       |           └── regular_classes.pth
     |       ├── results
-    |       ├── empirical_experiment.ipynb
-    |       ├── truncation_experiment.ipynb
-    |       ├── clustering_experiment.ipynb
+    |       ├── FashionMNIST_regular_classes_FR.ipynb
+    |       ├── FashionMNIST_regular_classes_FT.ipynb
+    |       ├── FashionMNIST_regular_classes_cluster.ipynb
+    |       ├── cluster_visualization.ipynb
     |       └── visualizations.ipynb
-    ├── CIFAR, FashionMNIST_to_MNIST and MNIST_to_FashionMNIST folders 
-    └── example_visualizations.ipynb
+    |
+    └── CIFAR, FashionMNIST_to_MNIST and MNIST_to_FashionMNIST folders 
 ```
 
 ## Setup Instructions

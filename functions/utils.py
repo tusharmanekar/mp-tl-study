@@ -52,7 +52,7 @@ class CustomCNN(nn.Module):
         # flattened_size = in_channels * input_dim * input_dim
         self.calculate_to_linear_size()
 
-        # 2 Linear layers (used for MNIST)
+        # 2 Linear layers (DEPRECATED)
         if params.get("two_linear_layers", None):
             # Add one fully connected layers for classification
             self.fc = nn.Linear(self._to_linear, params["hidden_dim_lin"])
@@ -98,46 +98,6 @@ class CustomCNN(nn.Module):
         return F.log_softmax(x, dim=1)
 
 class Trainer:
-    """
-    A class for training and evaluating a model with early stopping and best model saving functionalities.
-
-    Attributes:
-    - model: PyTorch model to be trained and evaluated.
-    - dataloader: Contains data loaders (train, validation, test) for training and evaluation.
-    - params: Dictionary containing various hyperparameters and settings.
-    - device: the device to which tensors should be moved before computation.
-    - optimizer: The optimizer for training.
-    - best_model_state: State dictionary of the best model.
-    - max_val_acc: The highest validation accuracy encountered during training.
-    - no_improve_epochs: Number of epochs without improvement in validation accuracy.
-    - is_cnn: Flag indicating if the model is a CNN.
-    - is_debug: Flag indicating if debug information should be printed.
-    - classification_report_flag: Flag indicating if a classification report should be generated.
-
-    Methods:
-    - train_epoch(): Runs a single epoch of training.
-    - evaluate(loader): Evaluates the model on a given data loader.
-    - save_best_model(): Saves the current state of the model as the best model.
-    - save_checkpoint(epoch, train_acc, val_acc): Saves the current state of the model and other information as a checkpoint.
-    - early_stopping_check(val_acc): Checks the stopping criterion and performs actions based on it.
-    - train(): Runs the training process for a number of epochs, with early stopping functionality.
-
-    Usage:
-    params = {
-      'device': 'cuda',
-      'lr': 0.001,
-      'num_train': 10,
-      'early_stop_patience': 3,
-      'save_best': True,
-      'save_checkpoints': False,
-      'is_cnn': True,
-      'is_debug': True,
-      'classification_report_flag': True
-    }
-
-    trainer = Trainer(model, dataloader, params)
-    train_acc, test_acc, effective_epochs, checkpoints = trainer.train()
-    """
     def __init__(self, model, dataloader, lr, params):
         self.model = model
         self.dataloader = dataloader
@@ -237,25 +197,6 @@ class Trainer:
         return train_acc, test_acc, effective_epochs, checkpoints
 
 def eval(model, device, dataset_loader, debug=False, classification_report_flag=False, is_cnn=True, logger=print):
-    """
-    Evaluates the model on the given dataset loader.
-
-    Parameters:
-    - model: the PyTorch model to evaluate.
-    - device: the device to which tensors should be moved before computation.
-    - dataset_loader: DataLoader for evaluation.
-    - debug: whether to print debug info like loss and accuracy.
-    - classification_report_flag: whether to print a classification report.
-    - is_cnn: a flag indicating if the model is a CNN. If it's not, the input data will be reshaped.
-    - logger: logging function for printing messages.
-
-    Returns:
-    - Accuracy of the model on the provided dataset loader.
-
-    Usage:
-    - accuracy = eval(model, device, dataset_loader, debug=False, is_cnn=False, classification_report_flag=False)
-    """
-
     model.eval()
     test_loss, correct = 0., 0.
     all_preds = []
@@ -289,20 +230,6 @@ def eval(model, device, dataset_loader, debug=False, classification_report_flag=
     return acc
 
 def cut_custom_cnn_model(model, cut_point, params, output_dim):
-    """
-    Cut the CustomCNN model at a specific layer and reinitialize the weights for layers after cut_point.
-
-    Parameters:
-    - model (CustomCNN): Original CustomCNN model.
-    - cut_point (int): Layer index (in terms of conv layers) at which to modify the model.
-    - freeze (bool): If True, layers before cut_point will have their weights frozen (from params)
-    - reinitialize (bool): If True, layers after cut_point will have their weights reinitialized (from params)
-    - output_dim (int): for the final linear layer that is used for classification
-
-    Returns:
-    - new_model (CustomCNN): Modified model.
-    """
-
     new_model = copy.deepcopy(model).to("cpu")
 
     # Get names of layers in the model
@@ -346,18 +273,6 @@ def cut_custom_cnn_model(model, cut_point, params, output_dim):
 
 # --------------------------------- DATA UTILS -----------------------------------
 def reduce_dataset(dataloader, percentage, balanced=True, seed=42):
-    """
-    Reduces the dataset to the given percentage. Can ensure class balance if needed.
-
-    Parameters:
-    - dataloader: PyTorch DataLoader object.
-    - percentage: Desired percentage of the original dataset.
-    - balanced: If True, ensures class balance. If False, reduces randomly.
-    - seed: Seed for reproducibility.
-
-    Returns:
-    - reduced_dataloader: DataLoader with the reduced dataset.
-    """
     # Extract the dataset from the dataloader
     dataset = dataloader.dataset
 
@@ -418,22 +333,7 @@ class RelabeledSubset(torch.utils.data.Dataset):
         return len(self.dataset)
 
 class TransferLearningWrapper:
-    """
-    This wrapper class provides a convenient way to switch between pretraining and fine-tuning phases,
-    handling different datasets for each phase.
-    """
     def __init__(self, params, pretrain_dataset, finetune_dataset, root_dir, transform=None):
-        """
-        Initializes the TransferLearningWrapper object.
-
-        Parameters:
-        - pretrain_dataset: Dataset class to be used for pretraining.
-        - finetune_dataset: Dataset class to be used for fine-tuning.
-        - root_dir: Directory where datasets will be downloaded or loaded from.
-        - batch_size: Batch size for data loaders.
-        - transform: Transformations to be applied to the datasets.
-        - val_split: Fraction of training data to be used for validation.
-        """
         if transform is None:
             transform = transforms.ToTensor()
         self.pre_train_classes = params["pre_train_classes"]
@@ -478,12 +378,6 @@ class TransferLearningWrapper:
         self.update_phase('pretrain')
 
     def update_phase(self, phase):
-        """
-        Updates the phase and the corresponding data loaders.
-
-        Parameters:
-        - phase: String indicating the desired phase ("pretrain" or "finetune").
-        """
         self.phase = phase
         if phase == 'pretrain':
             self.train_loader = self.pretrain_train_loader

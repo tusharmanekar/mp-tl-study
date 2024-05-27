@@ -29,6 +29,7 @@ CIFAR/.DS_Store
 CIFAR/FashionMNIST_base_*
 CIFAR/CIFAR_base_*
 CIFAR/alternative_architecture_search.ipynb
+CIFAR/empirical_experiment_*
 
 FashionMNIST_to_MNIST/experiments*
 FashionMNIST_to_MNIST/fashion_model.pth

@@ -82,34 +82,9 @@ class CNNFeatureExtractor(nn.Module):
             if "conv" in layer_name:
                 names.append(layer_name) 
         return names         
-    
-def extract_features_and_labels(model, data_loader, device):
-    model.eval()  # Set the model to evaluation mode
-    features_from_layers = {layer: [] for layer in model.get_features_layers()}
-    features_from_layers["input"] = []
-    labels_list = []
-
-    with torch.no_grad():
-        for images, labels in data_loader:
-            labels_list.extend(labels.numpy())
-
-            images = images.to(device)
-
-            # Extract features
-            out_features = model(images)
-
-            # Store features from each layer
-            for name, feature in out_features.items():
-                features_from_layers[name].append(feature)
-    
-    # Concatenate the features from all batches
-    for layer in features_from_layers:
-        features_from_layers[layer] = torch.cat(features_from_layers[layer], 0)
-
-    return features_from_layers, torch.Tensor(labels_list)
 
 def extract_features_and_labels_gap(model, data_loader, device):
-    model.eval()  # Set the model to evaluation mode
+    model.eval() 
     features_from_layers = {layer: [] for layer in model.get_features_layers()}
     labels_list = []
 
@@ -129,82 +104,16 @@ def extract_features_and_labels_gap(model, data_loader, device):
                     spatial_dims = tuple(range(2, len(feature.shape)))
                     # Perform global average pooling over spatial dimensions
                     pooled_feature = torch.mean(feature, dim=spatial_dims)
-                    # print(pooled_feature.shape)
                     features_from_layers[name].append(pooled_feature)
-                    # print(name, pooled_feature.shape)
     
     # Stack the features from all batches
     for layer in features_from_layers:
         if layer != "fc":
-            # print(features_from_layers[layer])
             features_from_layers[layer] = torch.cat(features_from_layers[layer], dim=0)
 
     return features_from_layers, torch.Tensor(labels_list)
 
-def visualize_tsne(features, labels, layer_name, title):
-    # Reshape features to 2D array
-    features_2d = features.view(features.size(0), -1).numpy()
-
-    # Apply t-SNE to reduce the dimensionality to 2D
-    tsne = TSNE(n_components=2, random_state=42)
-    tsne_result = tsne.fit_transform(features_2d)
-
-    # Plot t-SNE visualization for the layer
-    plt.figure(figsize=(10, 8))
-    plt.scatter(tsne_result[:, 0], tsne_result[:, 1], c=labels, cmap='viridis', marker='o', alpha=0.5)
-    plt.title(f't-SNE Visualization of Extracted Features ({layer_name} - {title})')
-    plt.colorbar()
-    plt.show()
-
-def calculate_ARI_score(features, labels, apply_pca=None):
-    # Reshape features to 2D array
-    features_2d = features.view(features.size(0), -1).numpy()
-    if apply_pca:
-        pca = PCA(n_components=apply_pca)
-        features_2d = pca.fit_transform(features_2d)
-
-    # KMeans clustering labels
-    kmeans = KMeans(n_clusters=np.unique(labels).shape[0], random_state=42)
-    cluster_labels = kmeans.fit_predict(features_2d)
-
-    # ARI 
-    ari = metrics.adjusted_rand_score(labels, cluster_labels)
-    return ari
-
-# Dataloader can be already subsampled using our subsampling function (reduce_dataset)
-# If yes, we can still use num_samples to randomly sample from that subset
-# or if num_samples = 0: take all the samples
-def get_ARI_scores(model, dataloader, num_samples, channel_ids, device, apply_pca=None):
-    # Extract features and labels using the feature extractor model and the test_loader
-    extracted_features, labels = extract_features_and_labels(model, dataloader, device)
-
-    dim_size = labels.size(0)
-
-    if num_samples > 0:
-        random_indices = torch.randperm(dim_size)[:num_samples]
-        sampled_labels = torch.index_select(labels, 0, random_indices)
-    else:
-        sampled_labels = labels
-
-    layer_names = extracted_features.keys()
-    results = {}
-
-    for layer_name in layer_names:
-        results_channels = {}
-        for channel_id in channel_ids:
-            if channel_id < extracted_features[layer_name].shape[1]:
-                if num_samples > 0:
-                    sampled_features = torch.index_select(extracted_features[layer_name], 0, random_indices)
-                    layer_features = sampled_features[:,channel_id]
-                else:
-                    sampled_features = extracted_features[layer_name]
-                    layer_features = sampled_features[:,channel_id]
-                ari = calculate_ARI_score(layer_features, sampled_labels, apply_pca=apply_pca)*100
-                results_channels[channel_id] = ari
-        results[layer_name] = results_channels
-    return results
-
-def calculate_pairwise_positioning_recall(labels, cluster_labels):
+def calculate_pairwise_precision(labels, cluster_labels):
     n = len(labels)
     labels = np.array(labels)
     cluster_labels = np.array(cluster_labels)
@@ -214,12 +123,10 @@ def calculate_pairwise_positioning_recall(labels, cluster_labels):
 
     if true_pairs == 0:
         return 0
-    
     return correct_pairs / true_pairs
 
 def remove_zero_vectors(features, labels):
     non_zero_mask = np.linalg.norm(features, axis=1) != 0
-    # print(non_zero_mask.shape, features.shape, labels.shape)
     return features[non_zero_mask], labels[non_zero_mask]
 
 def calculate_ppr_score(train_features, train_labels, test_features, test_labels, apply_tsne=None):
@@ -240,40 +147,24 @@ def calculate_ppr_score(train_features, train_labels, test_features, test_labels
     cluster_labels = clustering.fit_predict(test_features_2d)
 
     # Calculate pairwise positioning recall
-    ppr = calculate_pairwise_positioning_recall(test_labels, cluster_labels)
+    ppr = calculate_pairwise_precision(test_labels, cluster_labels)
     return ppr
 
-def get_PPR_scores(model, dataloader_train, dataloader_test, num_samples, device, apply_tsne=None):
+def get_PPR_scores(model, dataloader_train, dataloader_test, device, apply_tsne=None):
     # Extract features and labels using the feature extractor model and the test_loader
     extracted_features_train, train_labels = extract_features_and_labels_gap(model, dataloader_train, device)
     extracted_features_test, test_labels = extract_features_and_labels_gap(model, dataloader_test, device)
-    # print(extracted_features_train["conv0"].shape, train_labels.shape)
-    dim_size = train_labels.size(0)
 
-    if num_samples > 0:
-        random_indices = torch.randperm(dim_size)[:num_samples]
-        sampled_labels_train = torch.index_select(train_labels, 0, random_indices)
-        random_indices = torch.randperm(dim_size)[:num_samples]
-        sampled_labels_test = torch.index_select(train_labels, 0, random_indices)
-    else:
-        sampled_labels_train = train_labels
-        sampled_labels_test = test_labels
+    sampled_labels_train = train_labels
+    sampled_labels_test = test_labels
 
     layer_names = extracted_features_train.keys()
-    # print(layer_names)
     results = {}
 
     for layer_name in layer_names:
-        if  layer_name != "fc":
-            if num_samples > 0:
-                random_indices = torch.randperm(num_samples)[:num_samples]
-
-                sampled_features_train = extracted_features_train[layer_name][random_indices]
-                sampled_features_test = extracted_features_test[layer_name][random_indices]
-            else:
-                # If num_samples is 0, use all features without sampling
-                sampled_features_train = extracted_features_train[layer_name]
-                sampled_features_test = extracted_features_test[layer_name]
+        if  layer_name.startswith("conv"):
+            sampled_features_train = extracted_features_train[layer_name]
+            sampled_features_test = extracted_features_test[layer_name]
             ppr = calculate_ppr_score(sampled_features_train, sampled_labels_train, 
                                         sampled_features_test, sampled_labels_test, 
                                         apply_tsne=apply_tsne)*100

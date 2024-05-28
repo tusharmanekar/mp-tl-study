@@ -200,13 +200,8 @@ mp-tl-study
 
     Select mp-env as the kernel for running the notebooks
 
-3. Install project dependencies from the requirements file:
 
-    ```
-    pip install -r requirements.txt
-    ```
-
-4. Don't forget to change the path to the Github repo in each notebook
+3. Don't forget to change the path to the Github repo in each notebook
     ```
     sys.path.append('<PATH-TO-THE-REPO>/mp-tl-study')
     ```
@@ -219,10 +214,11 @@ Here are the parameters used in our experiments:
 
 - `depth`: The depth of the model architecture.
 - `num_channels`: The number of channels for the Convolutional Neural Network (CNN).
-- `two_linear_layers`: Whether to include two linear layers in the model. Default: None
-- `hidden_dim_lin`: The hidden dimension size if `two_linear_layers` is True.
 - `activation_function`: The activation function used in the model.
 - `kernel_size`: The kernel size used in the CNN.
+- `use_pooling`: Whether to use (average) pooling in the model.
+- `pooling_every_n_layers`: The frequency of pooling layers insertion. Default: 1
+- `pooling_stride`: The stride used in pooling. Default: 2
 
 ### Training Parameters
 
@@ -248,9 +244,6 @@ Here are the parameters used in our experiments:
 
 ### Experiment Setting Parameters
 
-- `use_pooling`: Whether to use pooling in the model.
-- `pooling_every_n_layers`: The frequency of pooling layers insertion. Default: 1
-- `pooling_stride`: The stride used in pooling. Default: 2
 - `freeze`: Whether to freeze convolutional layers before the cut.
 - `reinit`: Whether to reinitialize convolutional layers after the cut.
 - `reinit_both_dense`: Whether to reinitialize both dense layers or only the last dense layer. Default: True

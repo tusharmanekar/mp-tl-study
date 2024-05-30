@@ -10,6 +10,7 @@ import numpy as np
 from tqdm import tqdm
 import torch
 import torch.nn as nn
+from scipy.optimize import linear_sum_assignment
 
 class CNNFeatureExtractor(nn.Module):
     def __init__(self, params, output_dim, input_shape=(1, 28, 28)):
@@ -71,8 +72,8 @@ class CNNFeatureExtractor(nn.Module):
             if "conv" in layer_name or "fc" in layer_name:
                 outputs[layer_name] = x.cpu()
 
-        x = x.view(-1, self._to_linear) # Flatten
-        x = self.fc(x)
+        # x = x.view(-1, self._to_linear) # Flatten
+        # x = self.fc(x)
         # outputs["fc"] = F.log_softmax(x, dim=1).cpu()
         return outputs
 
@@ -84,7 +85,7 @@ class CNNFeatureExtractor(nn.Module):
         return names         
 
 def extract_features_and_labels_gap(model, data_loader, device):
-    model.eval() 
+    model.to(device).eval() 
     features_from_layers = {layer: [] for layer in model.get_features_layers()}
     labels_list = []
 
@@ -113,50 +114,77 @@ def extract_features_and_labels_gap(model, data_loader, device):
 
     return features_from_layers, torch.Tensor(labels_list)
 
-def calculate_pairwise_precision(labels, cluster_labels):
-    n = len(labels)
-    labels = np.array(labels)
-    cluster_labels = np.array(cluster_labels)
-    
-    true_pairs = np.sum((labels[:, None] == labels) & (np.arange(n)[:, None] != np.arange(n)))
-    correct_pairs = np.sum((labels[:, None] == labels) & (cluster_labels[:, None] == cluster_labels) & (np.arange(n)[:, None] != np.arange(n)))
-
-    if true_pairs == 0:
-        return 0
-    return correct_pairs / true_pairs
-
 def remove_zero_vectors(features, labels):
     non_zero_mask = np.linalg.norm(features, axis=1) != 0
     return features[non_zero_mask], labels[non_zero_mask]
 
-def calculate_ppr_score(train_features, train_labels, test_features, test_labels, apply_tsne=None):
+def pairwise_precision_recall(labels, cluster_labels):
+    true_same_cluster = (labels[:, None] == labels[None, :])
+    pred_same_cluster = (cluster_labels[:, None] == cluster_labels[None, :])
+
+    # Calculate true positives, false positives, false negatives, and true negatives
+    true_positives = np.sum(true_same_cluster & pred_same_cluster) // 2
+    false_positives = np.sum(~true_same_cluster & pred_same_cluster) // 2
+    false_negatives = np.sum(true_same_cluster & ~pred_same_cluster) // 2
+    true_negatives = np.sum(~true_same_cluster & ~pred_same_cluster) // 2
+
+    # Calculate pairwise precision and recall
+    pairwise_precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
+    pairwise_recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
+
+    return pairwise_precision, pairwise_recall
+
+def clustering_metrics(labels, cluster_labels):
+    accuracy = metrics.accuracy_score(labels, cluster_labels)
+    
+    # Calculate pairwise precision and recall
+    pairwise_precision, pairwise_recall = pairwise_precision_recall(labels, cluster_labels)
+    
+    return accuracy, pairwise_precision, pairwise_recall
+
+def calculate_ppr_score(train_features, train_labels, apply_tsne=None):
     # Reshape features to 2D array
     train_features_2d = train_features.view(train_features.size(0), -1).numpy()
-    test_features_2d = test_features.view(test_features.size(0), -1).numpy()
     # Remove zero vectors from train and test features
     train_features_2d, train_labels = remove_zero_vectors(train_features_2d, train_labels)
-    test_features_2d, test_labels = remove_zero_vectors(test_features_2d, test_labels)
 
     if apply_tsne:
         tsne = TSNE(n_components=apply_tsne, random_state=42)
         train_features_2d = tsne.fit_transform(train_features_2d)
-        test_features_2d = tsne.fit_transform(test_features_2d)
 
     # Agglomerative Clustering with cosine distance on test features
     clustering = AgglomerativeClustering(n_clusters=np.unique(train_labels).shape[0], affinity='cosine', linkage='average')
-    cluster_labels = clustering.fit_predict(test_features_2d)
+    cluster_labels = clustering.fit_predict(train_features_2d)
 
     # Calculate pairwise positioning recall
-    ppr = calculate_pairwise_precision(test_labels, cluster_labels)
-    return ppr
+    # ppr = calculate_pairwise_precision(test_labels, cluster_labels)
+    # return ppr
+    scores = optimal_mapping_metrics(train_labels.cpu().numpy(), np.array(cluster_labels))
+    return scores, metrics.adjusted_rand_score(train_labels.cpu().numpy(), np.array(cluster_labels))
 
-def get_PPR_scores(model, dataloader_train, dataloader_test, device, apply_tsne=None):
+def optimal_mapping_metrics(true_labels, cluster_labels):
+    unique_true_labels = np.unique(true_labels)
+    unique_cluster_labels = np.unique(cluster_labels)
+
+    cost_matrix = np.zeros((len(unique_true_labels), len(unique_cluster_labels)))
+
+    for i, true_label in enumerate(unique_true_labels):
+        for j, cluster_label in enumerate(unique_cluster_labels):
+            cost_matrix[i, j] = np.sum((true_labels == true_label) & (cluster_labels == cluster_label))
+
+    row_ind, col_ind = linear_sum_assignment(-cost_matrix)
+
+    mapped_cluster_labels = np.zeros_like(cluster_labels)
+    for i, cluster_label in enumerate(unique_cluster_labels):
+        mapped_cluster_labels[cluster_labels == cluster_label] = unique_true_labels[col_ind[i]]
+
+    return clustering_metrics(true_labels, mapped_cluster_labels)
+
+def get_scores(model, dataloader_train, device, apply_tsne=None):
     # Extract features and labels using the feature extractor model and the test_loader
     extracted_features_train, train_labels = extract_features_and_labels_gap(model, dataloader_train, device)
-    extracted_features_test, test_labels = extract_features_and_labels_gap(model, dataloader_test, device)
 
     sampled_labels_train = train_labels
-    sampled_labels_test = test_labels
 
     layer_names = extracted_features_train.keys()
     results = {}
@@ -164,9 +192,10 @@ def get_PPR_scores(model, dataloader_train, dataloader_test, device, apply_tsne=
     for layer_name in layer_names:
         if  layer_name.startswith("conv"):
             sampled_features_train = extracted_features_train[layer_name]
-            sampled_features_test = extracted_features_test[layer_name]
-            ppr = calculate_ppr_score(sampled_features_train, sampled_labels_train, 
-                                        sampled_features_test, sampled_labels_test, 
-                                        apply_tsne=apply_tsne)*100
-            results[layer_name] = ppr
+            # ppr = calculate_ppr_score(sampled_features_train, sampled_labels_train, 
+            #                             sampled_features_test, sampled_labels_test, 
+            #                             apply_tsne=apply_tsne)*100
+            (acc, precision, recall), ari = calculate_ppr_score(sampled_features_train, sampled_labels_train, 
+                                        apply_tsne=apply_tsne)
+            results[layer_name] = {'accuracy':acc, 'pairwise_precision':precision,'pairwise_recall':recall, 'ari':ari}
     return results

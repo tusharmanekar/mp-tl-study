@@ -1,6 +1,6 @@
 # Exploring Layer Freezing in Transfer Learning
 
-Masters Project repository of team- Arnisa, David and Tushar. See our report (link) for the details of experiment setup and the results.
+Masters Project repository of team- Arnisa, David and Tushar.
 
 ## Project Supervision
 

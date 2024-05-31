@@ -173,7 +173,7 @@ def cluster_box_plot(df:pd.DataFrame,
         else:
             axes[i].set_xlabel('')
         if tick_labels_dict:
-            axes[i].set_ylabel('PP')
+            axes[i].set_ylabel('ARI')
 
     if tick_labels_dict:
         final_ax = axes[-1]

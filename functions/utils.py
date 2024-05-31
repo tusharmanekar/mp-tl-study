@@ -42,7 +42,7 @@ class CustomCNN(nn.Module):
             setattr(self, f"act{i}", params.get("activation_function", nn.ReLU)())
 
             # Optionally add pooling layers to reduce spatial dimensions
-            if params.get("use_pooling", None) and (i+1) % params.get("pooling_every_n_layers", 1) == 0:
+            if params.get("use_pooling", None) and (i+1) % params.get("pooling_every_n_layers", 2) == 0:
                 setattr(self, f"pool{i}", nn.AvgPool2d(2, stride=params.get('pooling_stride', 2)))
 
             # Update the input channels for the next convolutional layer
@@ -67,10 +67,7 @@ class CustomCNN(nn.Module):
         x = torch.zeros((1,) + self.input_shape)
         for layer_name, layer in self.named_children():
             # Process the input tensor through convolutional and activation layers
-            if "conv" in layer_name or "act" in layer_name:
-                x = layer(x)
-            # Process the input tensor through pooling layers if they exist
-            elif "pool" in layer_name:
+            if "conv" in layer_name or "act" in layer_name or "pool" in layer_name:
                 x = layer(x)
             # If reached fully connected layers, break the loop
             elif isinstance(layer, nn.Linear):
@@ -81,10 +78,7 @@ class CustomCNN(nn.Module):
         # Iterate over each module in the CustomCNN class
         for layer_name, layer in self.named_children():
             # Process the input tensor through convolutional and activation layers
-            if "conv" in layer_name or "act" in layer_name:
-                x = layer(x)
-            # Process the input tensor through pooling layers if they exist
-            elif "pool" in layer_name:
+            if "conv" in layer_name or "act" in layer_name or "pool" in layer_name:
                 x = layer(x)
             # If reached fully connected layers, break the loop
             elif isinstance(layer, nn.Linear):

@@ -11,9 +11,10 @@ Masters Project repository of team- Arnisa, David and Tushar. See our report (li
 - Prof. Dr. Benjamin Grewe  
 - Pau Vilimelis Aceituno  
 
-## Introduction
+## Abstract
 
-Put our abstract here?
+This project investigates the effectiveness of transfer learning by exploring various fine-tuning design choices, including freezing earlier layers, reinitializing or truncating later layers, and determining the subset of layers of the pre-trained model to retain during fine-tuning. The study explores optimal strategies for adapting pre-trained models to new tasks across the MNIST, FashionMNIST and CIFAR10 datasets. We conduct systematic experiments across these datasets in which we vary the amount of target data and number of layers to transfer. Experiments reveal a pattern consistent across mutiple source and target dataset combinations, where the optimal number of pre-trained layers to retain is reduced with increasing target data, indicating a reduced reliance on pre-trained features as more task-specific data becomes available. Key findings also highlight that completely removing some of the final layers offers a viable, more parameter-efficient alternative. Additionally, we propose a clustering based approach to identify layers that contain more transferable features. This study offers a framework for making informed fine-tuning decisions, emphasizing the importance of design choices in transfer learning.
+
 
 ## Datasets
 
